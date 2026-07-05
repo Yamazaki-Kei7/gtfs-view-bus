@@ -2481,7 +2481,10 @@ export interface LoadedData {
 
 async function fetchJson<T>(url: string): Promise<T | null> {
 	const res = await fetch(url);
-	if (!res.ok) return null;
+	if (!res.ok) {
+		console.warn(`fetch failed: ${url} (${res.status})`);
+		return null;
+	}
 	return (await res.json()) as T;
 }
 
@@ -2516,10 +2519,8 @@ export async function loadAll(): Promise<LoadedData> {
 export const MAX_TIME_SEC = 28 * 3600;
 
 function todayIso(): string {
-	const now = new Date();
-	const mm = String(now.getMonth() + 1).padStart(2, '0');
-	const dd = String(now.getDate()).padStart(2, '0');
-	return `${now.getFullYear()}-${mm}-${dd}`;
+	// Workers の SSR は UTC で動くため、バスの運行日は Asia/Tokyo 基準で決める
+	return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date());
 }
 
 export const sim = $state({
@@ -2605,11 +2606,16 @@ git commit -m "feat(app): add data loader and simulation state"
 		class="w-full"
 	/>
 	<div class="text-xs text-gray-500">
-		データ: {#each feedInfos as f (f.id)}{f.name}({f.license ?? 'ライセンス不明'}) {/each}
+		データ: {#each feedInfos as f (f.id)}{f.name}({f.license ?? 'ライセンス不明'}{f.status ===
+			'error'
+			? '・更新失敗'
+			: ''}) {/each}
 		— GTFSデータリポジトリ(gtfs-data.jp) / 地図: © OpenStreetMap contributors
 	</div>
 </div>
 ```
+
+(`f.status === 'error'` のフィードは「・更新失敗」を付記し、古いデータが表示されている可能性を利用者に示す)
 
 - [ ] **Step 2: 地図ページを作成**
 

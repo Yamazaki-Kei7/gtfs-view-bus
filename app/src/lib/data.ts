@@ -29,7 +29,10 @@ export interface LoadedData {
 
 async function fetchJson<T>(url: string): Promise<T | null> {
 	const res = await fetch(url);
-	if (!res.ok) return null;
+	if (!res.ok) {
+		console.warn(`fetch failed: ${url} (${res.status})`);
+		return null;
+	}
 	return (await res.json()) as T;
 }
 
