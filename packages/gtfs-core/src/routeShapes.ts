@@ -53,19 +53,26 @@ export interface ShapeMatch {
  * 停留所列を路線ラインへマッチングする。
  * 候補 = 全パーツ連結・各パーツ・それぞれの逆順。停留所を単調射影し、
  * 「停留所→射影位置」の最大距離が最小の候補を返す。
+ * 連結候補はパーツ間ギャップの最大値をペナルティとして持つ
+ * (離れたパーツの幻の接続区間による誤マッチ防止)。連結が正当(ギャップ≈0)なら影響しない。
  * 採否判定(MAX_ROUTE_SHAPE_ERROR_M との比較)は呼び出し側が行う。
  */
 export function matchStopsToRouteLines(parts: LngLat[][], stops: LngLat[]): ShapeMatch | null {
 	if (parts.length === 0 || stops.length < 2) return null;
-	const candidates: { key: string; coords: LngLat[] }[] = [];
+	const candidates: { key: string; coords: LngLat[]; penalty: number }[] = [];
 	if (parts.length > 1) {
 		const concat = ([] as LngLat[]).concat(...parts);
-		candidates.push({ key: 'concat', coords: concat });
-		candidates.push({ key: 'concat-r', coords: [...concat].reverse() });
+		let maxGap = 0;
+		for (let i = 0; i < parts.length - 1; i++) {
+			const gap = haversineMeters(parts[i][parts[i].length - 1], parts[i + 1][0]);
+			if (gap > maxGap) maxGap = gap;
+		}
+		candidates.push({ key: 'concat', coords: concat, penalty: maxGap });
+		candidates.push({ key: 'concat-r', coords: [...concat].reverse(), penalty: maxGap });
 	}
 	parts.forEach((p, i) => {
-		candidates.push({ key: `part${i}`, coords: p });
-		candidates.push({ key: `part${i}-r`, coords: [...p].reverse() });
+		candidates.push({ key: `part${i}`, coords: p, penalty: 0 });
+		candidates.push({ key: `part${i}-r`, coords: [...p].reverse(), penalty: 0 });
 	});
 
 	let best: ShapeMatch | null = null;
@@ -76,7 +83,7 @@ export function matchStopsToRouteLines(parts: LngLat[][], stops: LngLat[]): Shap
 			cumDist: cumulativeDistances(cand.coords),
 		};
 		const distances = projectStopsToShape(shape, stops);
-		let maxError = 0;
+		let maxError = cand.penalty;
 		for (let i = 0; i < stops.length; i++) {
 			const err = haversineMeters(stops[i], pointAtDistance(shape, distances[i]));
 			if (err > maxError) maxError = err;

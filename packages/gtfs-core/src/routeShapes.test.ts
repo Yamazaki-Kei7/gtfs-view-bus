@@ -116,4 +116,22 @@ describe('matchStopsToRouteLines', () => {
 		expect(m!.maxError).toBeLessThan(30);
 		expect(m!.distances[1]).toBeGreaterThan(m!.distances[0]);
 	});
+
+	it('離れたパーツの幻の接続区間では低誤差を主張できない', () => {
+		const partA: LngLat[] = [
+			[0, 0],
+			[0.01, 0],
+		];
+		const partB: LngLat[] = [
+			[0.06, 0],
+			[0.07, 0],
+		]; // partAから約5.5km東
+		const stops: LngLat[] = [
+			[0.02, 0],
+			[0.05, 0],
+		]; // 幻の接続直線上に乗っている
+		const m = matchStopsToRouteLines([partA, partB], stops);
+		expect(m).not.toBeNull();
+		expect(m!.maxError).toBeGreaterThan(1000); // 150m閾値で確実に棄却される
+	});
 });
