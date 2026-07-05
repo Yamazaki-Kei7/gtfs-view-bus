@@ -1,7 +1,11 @@
 import type { LngLat, ShapeData } from './types';
 
-/** 時刻 t(秒)における累積距離。運行時間外なら null */
+/**
+ * 時刻 t(秒)における累積距離。運行時間外なら null。
+ * 前提: keyframes は時刻昇順(buildKeyframes の出力形式)。
+ */
 export function distanceAtTime(keyframes: [number, number][], t: number): number | null {
+	if (Number.isNaN(t)) return null;
 	if (keyframes.length < 2) return null;
 	const first = keyframes[0];
 	const last = keyframes[keyframes.length - 1];
@@ -19,11 +23,15 @@ export function distanceAtTime(keyframes: [number, number][], t: number): number
 	return d0 + ((d1 - d0) * (t - t0)) / (t1 - t0);
 }
 
-/** 累積距離 d(m)に対応する shape 上の座標(範囲外はクランプ) */
+/**
+ * 累積距離 d(m)に対応する shape 上の座標(範囲外・NaN はクランプ)。
+ * 前提: coords は非空、cumDist は非減少(上流の変換処理が保証する不変条件)。
+ */
 export function pointAtDistance(shape: ShapeData, dist: number): LngLat {
 	const { coords, cumDist } = shape;
+	if (coords.length === 0) throw new Error('pointAtDistance: shape has no coordinates');
 	const total = cumDist[cumDist.length - 1];
-	const d = Math.max(0, Math.min(dist, total));
+	const d = Number.isNaN(dist) ? 0 : Math.max(0, Math.min(dist, total));
 	let lo = 0;
 	let hi = cumDist.length - 1;
 	while (hi - lo > 1) {

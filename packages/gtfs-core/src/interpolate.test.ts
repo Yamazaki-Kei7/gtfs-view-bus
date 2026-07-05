@@ -24,6 +24,10 @@ describe('distanceAtTime', () => {
 	it('キーフレームが2未満なら null', () => {
 		expect(distanceAtTime([[100, 0]], 100)).toBeNull();
 	});
+
+	it('時刻が NaN なら null', () => {
+		expect(distanceAtTime(kf, NaN)).toBeNull();
+	});
 });
 
 describe('pointAtDistance', () => {
@@ -50,5 +54,19 @@ describe('pointAtDistance', () => {
 	it('範囲外はクランプされる', () => {
 		expect(pointAtDistance(shape, -10)).toEqual([139.0, 36.0]);
 		expect(pointAtDistance(shape, 1e9)[0]).toBeCloseTo(139.01, 8);
+	});
+
+	it('距離が NaN なら始点にクランプされる', () => {
+		expect(pointAtDistance(shape, NaN)).toEqual([139.0, 36.0]);
+	});
+
+	it('空の shape は例外を投げる', () => {
+		expect(() => pointAtDistance({ coords: [], cumDist: [] }, 0)).toThrow();
+	});
+
+	it('頂点1つの shape は任意の距離でその点を返す', () => {
+		const single: ShapeData = { coords: [[139.0, 36.0]], cumDist: [0] };
+		expect(pointAtDistance(single, 0)).toEqual([139.0, 36.0]);
+		expect(pointAtDistance(single, 500)).toEqual([139.0, 36.0]);
 	});
 });

@@ -15,6 +15,7 @@ export function buildKeyframes(
 	let lastT = -Infinity;
 	for (let i = 0; i < stopTimes.length; i++) {
 		const st = stopTimes[i];
+		// `??`(`||` ではない)は意図的: 時刻 0(深夜0時ちょうど)を欠損扱いしないため
 		const arrival = st.arrival ?? st.departure;
 		const departure = st.departure ?? st.arrival;
 		if (arrival === null || departure === null) continue;
