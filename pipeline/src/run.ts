@@ -41,7 +41,7 @@ export interface FeedStatus {
 	toDate: string;
 	status: 'updated' | 'unchanged' | 'error';
 	error?: string;
-	/** trip の形状ソース内訳(shapes / route / straight)。updated 時のみ */
+	/** trip の形状ソース内訳(shapes / route / straight)。unchanged 時は meta.json から引き継ぐ */
 	shapeSourceCounts?: Record<string, number>;
 }
 
@@ -69,9 +69,14 @@ export async function runPipeline({
 		};
 		try {
 			const metaObj = await bucket.get(`feeds/${id}/meta.json`);
-			const meta = metaObj ? (JSON.parse(await metaObj.text()) as { fileUid: string }) : null;
+			const meta = metaObj
+				? (JSON.parse(await metaObj.text()) as {
+						fileUid: string;
+						shapeSourceCounts?: Record<string, number>;
+					})
+				: null;
 			if (meta && meta.fileUid === entry.file_uid) {
-				statuses.push({ ...base, status: 'unchanged' });
+				statuses.push({ ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts });
 				continue;
 			}
 
@@ -101,7 +106,11 @@ export async function runPipeline({
 			// put の順序を入れ替えるとこの保証が静かに壊れる。
 			await bucket.put(
 				`feeds/${id}/meta.json`,
-				JSON.stringify({ fileUid: entry.file_uid, lastUpdatedAt: entry.file_last_updated_at }),
+				JSON.stringify({
+					fileUid: entry.file_uid,
+					lastUpdatedAt: entry.file_last_updated_at,
+					shapeSourceCounts: bundle.shapeSourceCounts,
+				}),
 			);
 			statuses.push({ ...base, status: 'updated', shapeSourceCounts: bundle.shapeSourceCounts });
 		} catch (e) {

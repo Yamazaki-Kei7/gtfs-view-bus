@@ -2160,13 +2160,17 @@ export interface FeedStatus {
 	toDate: string;
 	status: 'updated' | 'unchanged' | 'error';
 	error?: string;
-	/** trip の形状ソース内訳(shapes / route / straight)。updated 時のみ */
+	/** trip の形状ソース内訳(shapes / route / straight)。unchanged 時は meta.json から引き継ぐ */
 	shapeSourceCounts?: Record<string, number>;
 }
 
 const API_BASE = 'https://api.gtfs-data.jp/v2';
 
-export async function runPipeline({ bucket, fetcher, prefId }: PipelineDeps): Promise<FeedStatus[]> {
+export async function runPipeline({
+	bucket,
+	fetcher,
+	prefId,
+}: PipelineDeps): Promise<FeedStatus[]> {
 	const listRes = await fetcher(`${API_BASE}/files?pref=${prefId}`);
 	if (!listRes.ok) throw new Error(`feed list fetch failed: ${listRes.status}`);
 	const list = (await listRes.json()) as FilesResponse;
@@ -2185,10 +2189,13 @@ export async function runPipeline({ bucket, fetcher, prefId }: PipelineDeps): Pr
 		try {
 			const metaObj = await bucket.get(`feeds/${id}/meta.json`);
 			const meta = metaObj
-				? (JSON.parse(await metaObj.text()) as { fileUid: string })
+				? (JSON.parse(await metaObj.text()) as {
+						fileUid: string;
+						shapeSourceCounts?: Record<string, number>;
+					})
 				: null;
 			if (meta && meta.fileUid === entry.file_uid) {
-				statuses.push({ ...base, status: 'unchanged' });
+				statuses.push({ ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts });
 				continue;
 			}
 
@@ -2213,9 +2220,16 @@ export async function runPipeline({ bucket, fetcher, prefId }: PipelineDeps): Pr
 				if (res.ok) await bucket.put(`feeds/${id}/stops.geojson`, await res.text());
 			}
 
+			// meta.json は必ずこのフィードの最後の書き込みにすること: 更新完了のマーカーであり、
+			// 途中でクラッシュしても meta が残らず次回実行時に最初から再処理される(自己修復的な冪等性)。
+			// put の順序を入れ替えるとこの保証が静かに壊れる。
 			await bucket.put(
 				`feeds/${id}/meta.json`,
-				JSON.stringify({ fileUid: entry.file_uid, lastUpdatedAt: entry.file_last_updated_at }),
+				JSON.stringify({
+					fileUid: entry.file_uid,
+					lastUpdatedAt: entry.file_last_updated_at,
+					shapeSourceCounts: bundle.shapeSourceCounts,
+				}),
 			);
 			statuses.push({ ...base, status: 'updated', shapeSourceCounts: bundle.shapeSourceCounts });
 		} catch (e) {
@@ -2642,6 +2656,7 @@ git commit -m "feat(app): add data loader and simulation state"
 				type: 'raster',
 				tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
 				tileSize: 256,
+				maxzoom: 19,
 				attribution: '© OpenStreetMap contributors',
 			},
 		},
@@ -2936,6 +2951,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -2944,6 +2962,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm --filter app run prepare
+      - run: pnpm -r run check
+      - run: pnpm -r run test
       - run: pnpm --filter app build
       - name: Deploy pipeline worker
         uses: cloudflare/wrangler-action@v3

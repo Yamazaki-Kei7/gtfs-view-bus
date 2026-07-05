@@ -78,12 +78,13 @@ describe('runPipeline', () => {
 		expect(statuses[0].shapeSourceCounts).toEqual({ shapes: 1, route: 1, straight: 1 });
 	});
 
-	it('file_uid が同じなら unchanged でスキップする', async () => {
+	it('file_uid が同じなら unchanged でスキップし、shapeSourceCounts を引き継ぐ', async () => {
 		const bucket = fakeBucket();
 		const deps = { bucket, fetcher: fetcherFor([entry({})]), prefId: '10' };
 		await runPipeline(deps);
 		const second = await runPipeline(deps);
 		expect(second[0].status).toBe('unchanged');
+		expect(second[0].shapeSourceCounts).toEqual({ shapes: 1, route: 1, straight: 1 });
 	});
 
 	it('フィード一覧の取得失敗時は feeds.json に触れず reject する', async () => {
