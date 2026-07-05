@@ -1,0 +1,23 @@
+{
+	"name": "gtfs-view-bus",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "pnpm -r run test",
+		"check": "pnpm -r run check",
+		"lint": "eslint .",
+		"format": "prettier --write .",
+		"format:check": "prettier --check ."
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"eslint": "^10.6.0",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-svelte": "^3.20.0",
+		"globals": "^17.7.0",
+		"prettier": "^3.5.0",
+		"prettier-plugin-svelte": "^3.2.8",
+		"typescript-eslint": "^8.62.0"
+	},
+	"packageManager": "pnpm@10.34.4"
+}

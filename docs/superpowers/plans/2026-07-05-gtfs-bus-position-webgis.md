@@ -1250,6 +1250,24 @@ describe('matchStopsToRouteLines', () => {
 		expect(m!.maxError).toBeLessThan(30);
 		expect(m!.distances[1]).toBeGreaterThan(m!.distances[0]);
 	});
+
+	it('離れたパーツの幻の接続区間では低誤差を主張できない', () => {
+		const partA: LngLat[] = [
+			[0, 0],
+			[0.01, 0],
+		];
+		const partB: LngLat[] = [
+			[0.06, 0],
+			[0.07, 0],
+		]; // partAから約5.5km東
+		const stops: LngLat[] = [
+			[0.02, 0],
+			[0.05, 0],
+		]; // 幻の接続直線上に乗っている
+		const m = matchStopsToRouteLines([partA, partB], stops);
+		expect(m).not.toBeNull();
+		expect(m!.maxError).toBeGreaterThan(1000); // 150m閾値で確実に棄却される
+	});
 });
 ```
 
@@ -1318,19 +1336,26 @@ export interface ShapeMatch {
  * 停留所列を路線ラインへマッチングする。
  * 候補 = 全パーツ連結・各パーツ・それぞれの逆順。停留所を単調射影し、
  * 「停留所→射影位置」の最大距離が最小の候補を返す。
+ * 連結候補はパーツ間ギャップの最大値をペナルティとして持つ
+ * (離れたパーツの幻の接続区間による誤マッチ防止)。連結が正当(ギャップ≈0)なら影響しない。
  * 採否判定(MAX_ROUTE_SHAPE_ERROR_M との比較)は呼び出し側が行う。
  */
 export function matchStopsToRouteLines(parts: LngLat[][], stops: LngLat[]): ShapeMatch | null {
 	if (parts.length === 0 || stops.length < 2) return null;
-	const candidates: { key: string; coords: LngLat[] }[] = [];
+	const candidates: { key: string; coords: LngLat[]; penalty: number }[] = [];
 	if (parts.length > 1) {
 		const concat = ([] as LngLat[]).concat(...parts);
-		candidates.push({ key: 'concat', coords: concat });
-		candidates.push({ key: 'concat-r', coords: [...concat].reverse() });
+		let maxGap = 0;
+		for (let i = 0; i < parts.length - 1; i++) {
+			const gap = haversineMeters(parts[i][parts[i].length - 1], parts[i + 1][0]);
+			if (gap > maxGap) maxGap = gap;
+		}
+		candidates.push({ key: 'concat', coords: concat, penalty: maxGap });
+		candidates.push({ key: 'concat-r', coords: [...concat].reverse(), penalty: maxGap });
 	}
 	parts.forEach((p, i) => {
-		candidates.push({ key: `part${i}`, coords: p });
-		candidates.push({ key: `part${i}-r`, coords: [...p].reverse() });
+		candidates.push({ key: `part${i}`, coords: p, penalty: 0 });
+		candidates.push({ key: `part${i}-r`, coords: [...p].reverse(), penalty: 0 });
 	});
 
 	let best: ShapeMatch | null = null;
@@ -1341,7 +1366,7 @@ export function matchStopsToRouteLines(parts: LngLat[][], stops: LngLat[]): Shap
 			cumDist: cumulativeDistances(cand.coords),
 		};
 		const distances = projectStopsToShape(shape, stops);
-		let maxError = 0;
+		let maxError = cand.penalty;
 		for (let i = 0; i < stops.length; i++) {
 			const err = haversineMeters(stops[i], pointAtDistance(shape, distances[i]));
 			if (err > maxError) maxError = err;
@@ -2135,13 +2160,17 @@ export interface FeedStatus {
 	toDate: string;
 	status: 'updated' | 'unchanged' | 'error';
 	error?: string;
-	/** trip の形状ソース内訳(shapes / route / straight)。updated 時のみ */
+	/** trip の形状ソース内訳(shapes / route / straight)。unchanged 時は meta.json から引き継ぐ */
 	shapeSourceCounts?: Record<string, number>;
 }
 
 const API_BASE = 'https://api.gtfs-data.jp/v2';
 
-export async function runPipeline({ bucket, fetcher, prefId }: PipelineDeps): Promise<FeedStatus[]> {
+export async function runPipeline({
+	bucket,
+	fetcher,
+	prefId,
+}: PipelineDeps): Promise<FeedStatus[]> {
 	const listRes = await fetcher(`${API_BASE}/files?pref=${prefId}`);
 	if (!listRes.ok) throw new Error(`feed list fetch failed: ${listRes.status}`);
 	const list = (await listRes.json()) as FilesResponse;
@@ -2160,10 +2189,13 @@ export async function runPipeline({ bucket, fetcher, prefId }: PipelineDeps): Pr
 		try {
 			const metaObj = await bucket.get(`feeds/${id}/meta.json`);
 			const meta = metaObj
-				? (JSON.parse(await metaObj.text()) as { fileUid: string })
+				? (JSON.parse(await metaObj.text()) as {
+						fileUid: string;
+						shapeSourceCounts?: Record<string, number>;
+					})
 				: null;
 			if (meta && meta.fileUid === entry.file_uid) {
-				statuses.push({ ...base, status: 'unchanged' });
+				statuses.push({ ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts });
 				continue;
 			}
 
@@ -2188,9 +2220,16 @@ export async function runPipeline({ bucket, fetcher, prefId }: PipelineDeps): Pr
 				if (res.ok) await bucket.put(`feeds/${id}/stops.geojson`, await res.text());
 			}
 
+			// meta.json は必ずこのフィードの最後の書き込みにすること: 更新完了のマーカーであり、
+			// 途中でクラッシュしても meta が残らず次回実行時に最初から再処理される(自己修復的な冪等性)。
+			// put の順序を入れ替えるとこの保証が静かに壊れる。
 			await bucket.put(
 				`feeds/${id}/meta.json`,
-				JSON.stringify({ fileUid: entry.file_uid, lastUpdatedAt: entry.file_last_updated_at }),
+				JSON.stringify({
+					fileUid: entry.file_uid,
+					lastUpdatedAt: entry.file_last_updated_at,
+					shapeSourceCounts: bundle.shapeSourceCounts,
+				}),
 			);
 			statuses.push({ ...base, status: 'updated', shapeSourceCounts: bundle.shapeSourceCounts });
 		} catch (e) {
@@ -2213,6 +2252,7 @@ export async function runPipeline({ bucket, fetcher, prefId }: PipelineDeps): Pr
 `pipeline/src/index.ts`:
 
 ```ts
+import type { BucketLike } from './run';
 import { runPipeline } from './run';
 
 interface Env {
@@ -2220,10 +2260,24 @@ interface Env {
 	GTFS_PREF_ID: string;
 }
 
+/** R2Bucket.put() は R2Object を返すが BucketLike は void を期待するため薄くラップする */
+function toBucketLike(bucket: R2Bucket): BucketLike {
+	return {
+		get: (key) => bucket.get(key),
+		put: async (key, value) => {
+			await bucket.put(key, value);
+		},
+	};
+}
+
 export default {
 	async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
 		ctx.waitUntil(
-			runPipeline({ bucket: env.DATA_BUCKET, fetcher: fetch, prefId: env.GTFS_PREF_ID }),
+			runPipeline({
+				bucket: toBucketLike(env.DATA_BUCKET),
+				fetcher: fetch,
+				prefId: env.GTFS_PREF_ID,
+			}),
 		);
 	},
 } satisfies ExportedHandler<Env>;
@@ -2456,7 +2510,10 @@ export interface LoadedData {
 
 async function fetchJson<T>(url: string): Promise<T | null> {
 	const res = await fetch(url);
-	if (!res.ok) return null;
+	if (!res.ok) {
+		console.warn(`fetch failed: ${url} (${res.status})`);
+		return null;
+	}
 	return (await res.json()) as T;
 }
 
@@ -2491,12 +2548,12 @@ export async function loadAll(): Promise<LoadedData> {
 export const MAX_TIME_SEC = 28 * 3600;
 
 function todayIso(): string {
-	const now = new Date();
-	const mm = String(now.getMonth() + 1).padStart(2, '0');
-	const dd = String(now.getDate()).padStart(2, '0');
-	return `${now.getFullYear()}-${mm}-${dd}`;
+	// Workers の SSR は UTC で動くため、バスの運行日は Asia/Tokyo 基準で決める
+	return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date());
 }
 
+// モジュールレベルの $state は Workers の同一 isolate 内で複数リクエストに共有される。
+// SSR 中に sim を書き換えるコードを追加してはならない(クライアント側でのみ変更すること)。
 export const sim = $state({
 	/** YYYY-MM-DD (input[type=date] 互換) */
 	date: todayIso(),
@@ -2580,11 +2637,17 @@ git commit -m "feat(app): add data loader and simulation state"
 		class="w-full"
 	/>
 	<div class="text-xs text-gray-500">
-		データ: {#each feedInfos as f (f.id)}{f.name}({f.license ?? 'ライセンス不明'}) {/each}
+		データ: {#each feedInfos as f (f.id)}{f.name}({f.license ?? 'ライセンス不明'}{f.status ===
+			'error'
+				? '・更新失敗'
+				: ''})
+		{/each}
 		— GTFSデータリポジトリ(gtfs-data.jp) / 地図: © OpenStreetMap contributors
 	</div>
 </div>
 ```
+
+(`f.status === 'error'` のフィードは「・更新失敗」を付記し、古いデータが表示されている可能性を利用者に示す)
 
 - [ ] **Step 2: 地図ページを作成**
 
@@ -2592,25 +2655,34 @@ git commit -m "feat(app): add data loader and simulation state"
 
 ```svelte
 <script lang="ts">
-	import {
-		CircleLayer,
-		GeoJSONSource,
-		LineLayer,
-		MapLibre,
-		Popup,
-		RasterLayer,
-		RasterTileSource,
-	} from 'svelte-maplibre-gl';
+	import { CircleLayer, GeoJSONSource, LineLayer, MapLibre, Popup } from 'svelte-maplibre-gl';
+	import type { Map as MaplibreMap, StyleSpecification } from 'maplibre-gl';
 	import { busFeatureCollection, type BusFeatureCollection } from 'gtfs-core';
 	import Controls from '$lib/Controls.svelte';
 	import { loadAll, type LoadedData } from '$lib/data';
 	import { MAX_TIME_SEC, sim } from '$lib/sim.svelte';
 
+	// OSMベースマップは初期スタイルに含める(RasterTileSource コンポーネント経由だと
+	// タイルが読み込まれない事象があるため、スタイルオブジェクトで確実に描画する)
+	const BASE_STYLE: StyleSpecification = {
+		version: 8,
+		sources: {
+			osm: {
+				type: 'raster',
+				tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+				tileSize: 256,
+				maxzoom: 19,
+				attribution: '© OpenStreetMap contributors',
+			},
+		},
+		layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+	};
+
+	let map = $state<MaplibreMap | undefined>();
 	let data = $state<LoadedData | null>(null);
 	let loadError = $state<string | null>(null);
-	let selected = $state<{ lnglat: [number, number]; routeName: string; tripId: string } | null>(
-		null,
-	);
+	// trip_id はフィード内でのみ一意なので、選択キーは feedId と組み合わせる
+	let selectedKey = $state<string | null>(null);
 
 	$effect(() => {
 		loadAll()
@@ -2622,6 +2694,29 @@ git commit -m "feat(app): add data loader and simulation state"
 	const buses = $derived(
 		data ? busFeatureCollection(data.feeds, sim.date.replaceAll('-', ''), sim.timeSec) : EMPTY_FC,
 	);
+
+	// ポップアップはクリック時のスナップショットではなく毎フレームの最新位置に追随させる
+	// (便が運行を終えたり日付が変わったら自動的に閉じる)
+	const selectedBus = $derived(
+		selectedKey
+			? (buses.features.find(
+					(f) => `${f.properties.feedId}|${f.properties.tripId}` === selectedKey,
+				) ?? null)
+			: null,
+	);
+
+	// 非表示タブ/プリレンダリング中に初期化されると初回描画が抜けることがあるため、
+	// マウント直後と再表示時に resize で再描画を促す
+	$effect(() => {
+		if (!map) return;
+		const kick = () => map?.resize();
+		const t = setTimeout(kick, 100);
+		document.addEventListener('visibilitychange', kick);
+		return () => {
+			clearTimeout(t);
+			document.removeEventListener('visibilitychange', kick);
+		};
+	});
 
 	// 再生ループ: 実時間 dt 秒 → シミュレーション dt×speed 秒
 	$effect(() => {
@@ -2643,19 +2738,7 @@ git commit -m "feat(app): add data loader and simulation state"
 </script>
 
 <div class="relative h-screen w-screen">
-	<MapLibre
-		class="h-full w-full"
-		style={{ version: 8, sources: {}, layers: [] }}
-		center={[139.2, 36.35]}
-		zoom={10}
-	>
-		<RasterTileSource
-			tiles={['https://tile.openstreetmap.org/{z}/{x}/{y}.png']}
-			tileSize={256}
-			attribution="© OpenStreetMap contributors"
-		>
-			<RasterLayer />
-		</RasterTileSource>
+	<MapLibre bind:map class="h-full w-full" style={BASE_STYLE} center={[139.2, 36.35]} zoom={10}>
 		{#if data}
 			<GeoJSONSource data={data.routes}>
 				<LineLayer paint={{ 'line-color': '#3b82f6', 'line-width': 2, 'line-opacity': 0.5 }} />
@@ -2682,32 +2765,32 @@ git commit -m "feat(app): add data loader and simulation state"
 				onclick={(ev) => {
 					const f = ev.features?.[0];
 					if (f && f.geometry.type === 'Point') {
-						selected = {
-							lnglat: [f.geometry.coordinates[0], f.geometry.coordinates[1]],
-							routeName: String(f.properties.routeName),
-							tripId: String(f.properties.tripId),
-						};
+						selectedKey = `${String(f.properties.feedId)}|${String(f.properties.tripId)}`;
 					}
 				}}
 			/>
 		</GeoJSONSource>
-		{#if selected}
-			<Popup lnglat={selected.lnglat} onclose={() => (selected = null)}>
+		{#if selectedBus}
+			<Popup lnglat={selectedBus.geometry.coordinates} onclose={() => (selectedKey = null)}>
 				<div class="text-sm">
-					<div class="font-bold">{selected.routeName}</div>
-					<div class="text-gray-600">便: {selected.tripId}</div>
+					<div class="font-bold">{selectedBus.properties.routeName}</div>
+					<div class="text-gray-600">便: {selectedBus.properties.tripId}</div>
 				</div>
 			</Popup>
 		{/if}
 	</MapLibre>
 
 	{#if loadError}
-		<div class="absolute top-4 left-1/2 z-10 -translate-x-1/2 rounded bg-red-600 px-4 py-2 text-white">
+		<div
+			class="absolute top-4 left-1/2 z-10 -translate-x-1/2 rounded bg-red-600 px-4 py-2 text-white"
+		>
 			{loadError}
 		</div>
 	{/if}
 	{#if data && buses.features.length === 0}
-		<div class="absolute top-4 left-1/2 z-10 -translate-x-1/2 rounded bg-gray-800/80 px-4 py-2 text-sm text-white">
+		<div
+			class="absolute top-4 left-1/2 z-10 -translate-x-1/2 rounded bg-gray-800/80 px-4 py-2 text-sm text-white"
+		>
 			この日時に運行中のバスはありません(日付がダイヤの有効期間外の可能性があります)
 		</div>
 	{/if}
@@ -2883,6 +2966,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -2891,6 +2977,11 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm --filter app run prepare
+      - run: pnpm -r run check
+      - run: pnpm -r run test
       - run: pnpm --filter app build
       - name: Deploy pipeline worker
         uses: cloudflare/wrangler-action@v3

@@ -1,0 +1,9 @@
+{
+	"name": "gtfs-view-bus-pipeline",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-06-01",
+	// 毎月末日 20:00 UTC = 翌月1日 05:00 JST。L記法が拒否されたら "0 0 1 * *" に変更
+	"triggers": { "crons": ["0 20 L * *"] },
+	"r2_buckets": [{ "binding": "DATA_BUCKET", "bucket_name": "gtfs-view-bus-data" }],
+	"vars": { "GTFS_PREF_ID": "10" },
+}
