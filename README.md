@@ -10,19 +10,34 @@
 
 ## 開発
 
+前提: Node 22 以上 + pnpm 10 + [just](https://just.systems)(`brew install just`)。
+
+日常のタスクは root から `just` で実行する。`just` を引数なしで実行するとレシピ一覧が表示される。
+
 ```bash
-pnpm install
-pnpm -r run test
-
-# ローカルR2にデータ投入(初回のみ)
-cd pipeline && pnpm dev
-# 別ターミナルで: curl "http://localhost:8787/__scheduled?cron=0+20+L+*+*"
-
-# フロント起動
-pnpm --filter app dev
+just setup   # 依存関係のインストール
+just test    # 全パッケージのテスト
+just check   # 全パッケージの型チェック
+just lint    # ESLint
+just format  # Prettier で整形
+just build   # アプリのプロダクションビルド
+just ci      # CI と同じチェックを一括実行(format:check → lint → check → test → build)
 ```
 
-Node 22 以上 + pnpm 10 を使用する。
+### ローカルで動かす
+
+```bash
+# ターミナル1: パイプラインWorkerを起動(ローカルR2に永続化)
+just pipeline
+
+# ターミナル2: ローカルR2にGTFSデータを投入(初回のみ)
+just seed
+
+# ターミナル2: フロント開発サーバーを起動
+just dev
+```
+
+just を使わない場合の生コマンドは `justfile` を参照。
 
 ## デプロイ
 
