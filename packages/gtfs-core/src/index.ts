@@ -9,3 +9,4 @@ export * from './interpolate';
 export * from './routeShapes';
 export * from './convert';
 export * from './fixture';
+export * from './bus';
