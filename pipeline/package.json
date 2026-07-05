@@ -1,0 +1,22 @@
+{
+	"name": "pipeline",
+	"private": true,
+	"version": "0.0.1",
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev --test-scheduled --persist-to ../.wrangler/state",
+		"deploy": "wrangler deploy",
+		"test": "vitest run",
+		"check": "tsc --noEmit"
+	},
+	"dependencies": {
+		"gtfs-core": "workspace:*"
+	},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20260628.1",
+		"fflate": "^0.8.3",
+		"typescript": "^6.0.3",
+		"vitest": "^4.1.9",
+		"wrangler": "^4.105.0"
+	}
+}
