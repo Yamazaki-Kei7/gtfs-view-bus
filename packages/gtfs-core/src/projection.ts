@@ -24,16 +24,17 @@ export function projectPointToPolyline(
 	minSegment = 0,
 	minT = 0,
 ): Projection {
+	if (coords.length === 0) return { dist: 0, segment: 0, t: 0 };
 	const cosLat = Math.cos(point[1] * DEG);
 	const p = toXY(point, cosLat);
 	let bestDist = cumDist[cumDist.length - 1];
 	let bestSegment = Math.max(coords.length - 2, 0);
 	let bestT = 1;
 	let bestD2 = Infinity;
+	// 実質的な同点では先に見つかったセグメント(=より手前側)を優先する。
 	// 折り返し・ループ路線では往路と復路が同一線上に重なり、浮動小数点誤差だけで
-	// どちらのセグメントが「最近傍」か決まってしまうことがある。そのような
-	// 実質的な同点では、単調増加制約に沿うよう常に先に見つかったセグメント
-	// (=より手前側)を優先するため、相対許容誤差を設けて更新条件を厳しくする。
+	// どちらが「最近傍」か決まってしまうため、相対許容誤差を設けて更新条件を
+	// 厳しくし、単調増加制約に沿った選択を保証する。
 	const TIE_EPS = 1e-9;
 	for (let i = Math.max(0, minSegment); i < coords.length - 1; i++) {
 		const a = toXY(coords[i], cosLat);
