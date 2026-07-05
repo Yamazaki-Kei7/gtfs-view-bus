@@ -16,13 +16,16 @@
 - 群馬県は現在3フィード: annakacity/annakashi-rosenbus、gunma-otacity/ootacitybus、oizumitown/kouikikoukyoubasuaozora
 - 一覧レスポンス: `{ code, message, body: [...] }`。各エントリの主要フィールド: `organization_id`, `organization_name`, `feed_id`, `feed_name`, `feed_license_id`, `file_uid`, `file_from_date`, `file_to_date`, `file_url`(zip), `file_stop_url`(stops.geojson), `file_route_url`(routes.geojson), `file_last_updated_at`
 - **リポジトリが stops.geojson / routes.geojson を提供している**ため、表示用GeoJSONは自前生成せずコピーする(設計書の「pipeline が生成」をこの形で満たす)
+- フィードzipは 12〜128KB と極小(3フィード合計約170KB)。`file_url` は**リダイレクトを返す**ためfetch時は追従が必要(Workers の fetch は既定で追従する)
+- **太田市・大泉町のフィードには shapes.txt が無い**(安中市のみあり)。一方 routes.geojson は道路形状を持つ(例: 太田市尾島線は MultiLineString で計320頂点、`properties.id` = route_id、`properties.route_name` あり)。よって shapes.txt が無い trip は routes.geojson の形状にマッチングする(下記)
 - svelte-maplibre-gl v2 は `MapLibre` / `GeoJSONSource`(propsは `GeoJSONSourceSpecification` 準拠で `data` を持つ) / `CircleLayer` / `LineLayer` / `RasterTileSource` / `RasterLayer` / `Popup`(`lnglat` prop)をエクスポート。maplibre-gl は peerDependency で**未インストール**
 - app の雛形は `svelte.config.js` を持たず、`vite.config.ts` の `sveltekit({ adapter })` でアダプタを設定するスタイル
 
 **実装上の設計判断(設計書からの具体化):**
 
 - `shape_dist_traveled` は使わず**常に自前射影**する(単位系の揺れを排除し、コードパスを1本化)
-- shapes.txt に無い/欠損 trip は停留所座標列を仮想shapeとして扱う
+- **形状の解決優先順位(tripごと)**: ①shapes.txt → ②routes.geojson の形状マッチング(各パーツ・全パーツ連結・それぞれの逆順を候補とし、停留所の単調射影で最大射影誤差が150m以内の最良候補を採用) → ③停留所座標の直線ポリライン(最終フォールバック)。ソース内訳を `bundle.shapeSourceCounts` と feeds.json に記録する
+- 出力サイズ規律: 座標は小数6桁、距離は0.1m単位に丸める(設計書「データ形式の選定理由」参照)
 - 24時超の便(例: 25:10発)に対応するため、時刻スケールは 0〜28時(100800秒)。前日運行便の深夜帯表示は `timeSec + 86400` で前日カレンダーも判定する
 - R2キー: `feeds.json` / `feeds/{org}~{feed}~{fromDate}/bundle.json|stops.geojson|routes.geojson|meta.json`
 - Cron: `0 20 L * *`(毎月末日20:00 UTC = 翌月1日 05:00 JST。CloudflareはL記法対応。デプロイ時にエラーになる場合は `0 0 1 * *`=1日9:00 JSTに変更)
@@ -382,11 +385,15 @@ export interface CalendarData {
 	exceptions: Record<string, Record<string, number>>;
 }
 
+/** trip の形状の由来: shapes.txt / routes.geojson マッチング / 停留所直線フォールバック */
+export type ShapeSource = 'shapes' | 'route' | 'straight';
+
 export interface FeedBundle {
 	calendar: CalendarData;
 	routes: Record<string, RouteData>;
 	shapes: Record<string, ShapeData>;
 	trips: TripData[];
+	shapeSourceCounts: Record<ShapeSource, number>;
 }
 ```
 
@@ -1080,6 +1087,240 @@ git commit -m "feat(gtfs-core): add keyframe generation and time-to-position int
 
 ---
 
+## Task 6.5: routes.geojson 形状マッチング
+
+shapes.txt が無いフィード(太田市・大泉町)向けに、リポジトリ提供の routes.geojson の道路形状へ停留所列をマッチングするモジュール。
+
+**Files:**
+- Create: `packages/gtfs-core/src/routeShapes.ts`
+- Modify: `packages/gtfs-core/src/index.ts`
+- Test: `packages/gtfs-core/src/routeShapes.test.ts`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`packages/gtfs-core/src/routeShapes.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { matchStopsToRouteLines, parseRouteLines } from './routeShapes';
+import type { LngLat } from './types';
+
+/** 東西1113m(赤道上0.01度)の道路を0.001度刻みで表した密なポリライン */
+const road: LngLat[] = Array.from({ length: 11 }, (_, i) => [i * 0.001, 0]);
+
+describe('parseRouteLines', () => {
+	it('LineString と MultiLineString を route_id ごとのパーツ配列にする', () => {
+		const text = JSON.stringify({
+			type: 'FeatureCollection',
+			features: [
+				{
+					type: 'Feature',
+					properties: { id: '10', route_name: 'A線' },
+					geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] },
+				},
+				{
+					type: 'Feature',
+					properties: { id: 20 },
+					geometry: {
+						type: 'MultiLineString',
+						coordinates: [
+							[[0, 0], [1, 0]],
+							[[1, 0], [2, 0]],
+						],
+					},
+				},
+			],
+		});
+		const lines = parseRouteLines(text);
+		expect(lines['10'].length).toBe(1);
+		expect(lines['20'].length).toBe(2);
+	});
+
+	it('id なし・不正ジオメトリはスキップする', () => {
+		const text = JSON.stringify({
+			type: 'FeatureCollection',
+			features: [
+				{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] } },
+				{ type: 'Feature', properties: { id: '30' }, geometry: null },
+			],
+		});
+		expect(Object.keys(parseRouteLines(text))).toEqual([]);
+	});
+});
+
+describe('matchStopsToRouteLines', () => {
+	it('道路沿いの停留所列は小さな誤差でマッチし距離が単調増加する', () => {
+		// 道路から約11m(0.0001度)ずれた停留所
+		const stops: LngLat[] = [
+			[0.001, 0.0001],
+			[0.005, -0.0001],
+			[0.009, 0.0001],
+		];
+		const m = matchStopsToRouteLines([road], stops);
+		expect(m).not.toBeNull();
+		expect(m!.maxError).toBeLessThan(30);
+		expect(m!.distances[0]).toBeLessThan(m!.distances[1]);
+		expect(m!.distances[1]).toBeLessThan(m!.distances[2]);
+	});
+
+	it('逆順の停留所列(復路便)は逆向き候補にマッチする', () => {
+		const stops: LngLat[] = [
+			[0.009, 0.0001],
+			[0.005, -0.0001],
+			[0.001, 0.0001],
+		];
+		const m = matchStopsToRouteLines([road], stops);
+		expect(m).not.toBeNull();
+		expect(m!.maxError).toBeLessThan(30);
+		// 逆向き候補上で距離は単調増加になる
+		expect(m!.distances[0]).toBeLessThan(m!.distances[2]);
+	});
+
+	it('路線から大きく外れた停留所列は誤差が大きい(呼び出し側で棄却される)', () => {
+		const stops: LngLat[] = [
+			[0.001, 0.05], // 約5.5km 北
+			[0.009, 0.05],
+		];
+		const m = matchStopsToRouteLines([road], stops);
+		expect(m).not.toBeNull();
+		expect(m!.maxError).toBeGreaterThan(1000);
+	});
+
+	it('パーツが分割されていても連結候補でマッチする', () => {
+		const parts: LngLat[][] = [road.slice(0, 6), road.slice(5)];
+		const stops: LngLat[] = [
+			[0.001, 0.0001],
+			[0.009, 0.0001],
+		];
+		const m = matchStopsToRouteLines(parts, stops);
+		expect(m).not.toBeNull();
+		expect(m!.maxError).toBeLessThan(30);
+		expect(m!.distances[1]).toBeGreaterThan(m!.distances[0]);
+	});
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認**
+
+Run: `pnpm --filter gtfs-core test`
+Expected: FAIL(`./routeShapes` が存在しない)
+
+- [ ] **Step 3: routeShapes.ts を実装**
+
+`packages/gtfs-core/src/routeShapes.ts`:
+
+```ts
+import { cumulativeDistances, haversineMeters } from './geo';
+import { pointAtDistance } from './interpolate';
+import { projectStopsToShape } from './projection';
+import type { LngLat, ShapeData } from './types';
+
+/** routes.geojson マッチングの許容最大射影誤差(m)。超えたら直線フォールバック */
+export const MAX_ROUTE_SHAPE_ERROR_M = 150;
+
+/** route_id → ラインパーツ(頂点列)の配列 */
+export type RouteLines = Record<string, LngLat[][]>;
+
+interface RouteFeature {
+	properties: { id?: string | number } | null;
+	geometry:
+		| { type: 'LineString'; coordinates: LngLat[] }
+		| { type: 'MultiLineString'; coordinates: LngLat[][] }
+		| null;
+}
+
+interface RouteFeatureCollection {
+	features: RouteFeature[];
+}
+
+export function parseRouteLines(geojsonText: string): RouteLines {
+	const fc = JSON.parse(geojsonText) as RouteFeatureCollection;
+	const lines: RouteLines = {};
+	for (const f of fc.features ?? []) {
+		const id = f.properties?.id;
+		if (id === undefined || id === null || !f.geometry) continue;
+		const parts =
+			f.geometry.type === 'LineString'
+				? [f.geometry.coordinates]
+				: f.geometry.type === 'MultiLineString'
+					? f.geometry.coordinates
+					: [];
+		const valid = parts.filter((p) => p.length >= 2);
+		if (valid.length > 0) (lines[String(id)] ??= []).push(...valid);
+	}
+	return lines;
+}
+
+export interface ShapeMatch {
+	/** 候補の識別子(shapeId の一部に使う): 'concat' | 'concat-r' | 'part0' | 'part0-r' | ... */
+	key: string;
+	shape: ShapeData;
+	/** 各停留所の累積距離(単調非減少) */
+	distances: number[];
+	/** 停留所と射影位置の最大距離(m) */
+	maxError: number;
+}
+
+/**
+ * 停留所列を路線ラインへマッチングする。
+ * 候補 = 全パーツ連結・各パーツ・それぞれの逆順。停留所を単調射影し、
+ * 「停留所→射影位置」の最大距離が最小の候補を返す。
+ * 採否判定(MAX_ROUTE_SHAPE_ERROR_M との比較)は呼び出し側が行う。
+ */
+export function matchStopsToRouteLines(parts: LngLat[][], stops: LngLat[]): ShapeMatch | null {
+	if (parts.length === 0 || stops.length < 2) return null;
+	const candidates: { key: string; coords: LngLat[] }[] = [];
+	if (parts.length > 1) {
+		const concat = ([] as LngLat[]).concat(...parts);
+		candidates.push({ key: 'concat', coords: concat });
+		candidates.push({ key: 'concat-r', coords: [...concat].reverse() });
+	}
+	parts.forEach((p, i) => {
+		candidates.push({ key: `part${i}`, coords: p });
+		candidates.push({ key: `part${i}-r`, coords: [...p].reverse() });
+	});
+
+	let best: ShapeMatch | null = null;
+	for (const cand of candidates) {
+		if (cand.coords.length < 2) continue;
+		const shape: ShapeData = {
+			coords: cand.coords,
+			cumDist: cumulativeDistances(cand.coords),
+		};
+		const distances = projectStopsToShape(shape, stops);
+		let maxError = 0;
+		for (let i = 0; i < stops.length; i++) {
+			const err = haversineMeters(stops[i], pointAtDistance(shape, distances[i]));
+			if (err > maxError) maxError = err;
+		}
+		if (!best || maxError < best.maxError) {
+			best = { key: cand.key, shape, distances, maxError };
+		}
+	}
+	return best;
+}
+```
+
+`packages/gtfs-core/src/index.ts` に追記:
+
+```ts
+export * from './routeShapes';
+```
+
+- [ ] **Step 4: テストが通ることを確認**
+
+Run: `pnpm --filter gtfs-core test` → PASS
+Run: `pnpm --filter gtfs-core check` → exit 0
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/gtfs-core
+git commit -m "feat(gtfs-core): add stop-sequence matching against routes.geojson road geometry"
+```
+
+---
+
 ## Task 7: フィード変換(convert)とテストフィクスチャ
 
 **Files:**
@@ -1102,10 +1343,12 @@ C,公園,36.0100,139.0100
 `,
 	'routes.txt': `route_id,route_short_name,route_long_name,route_color
 R1,1,駅前線,FF0000
+R2,2,循環線,0000FF
 `,
 	'trips.txt': `route_id,service_id,trip_id,shape_id
 R1,WD,T1,S1
 R1,WD,T2,
+R2,WD,T3,
 `,
 	'stop_times.txt': `trip_id,arrival_time,departure_time,stop_id,stop_sequence
 T1,08:00:00,08:00:00,A,1
@@ -1114,6 +1357,9 @@ T1,08:30:00,08:30:00,C,3
 T2,24:50:00,24:50:00,A,1
 T2,25:00:00,25:00:00,B,2
 T2,25:20:00,25:20:00,C,3
+T3,09:00:00,09:00:00,A,1
+T3,09:10:00,09:10:00,B,2
+T3,09:30:00,09:30:00,C,3
 `,
 	'shapes.txt': `shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence
 S1,36.0000,139.0000,1
@@ -1128,9 +1374,27 @@ WD,1,1,1,1,1,0,0,20260401,20270331
 20260712,WD,1
 `,
 };
+
+/** R2 の道路形状: L字を0.001度刻みで密にした頂点列(shapes.txt なしフィードの代替形状源) */
+const r2RoadCoords: [number, number][] = [
+	...Array.from({ length: 11 }, (_, i): [number, number] => [139.0 + i * 0.001, 36.0]),
+	...Array.from({ length: 10 }, (_, i): [number, number] => [139.01, 36.001 + i * 0.001]),
+];
+
+/** リポジトリ提供の routes.geojson を模したフィクスチャ(properties.id = route_id) */
+export const FIXTURE_ROUTES_GEOJSON = JSON.stringify({
+	type: 'FeatureCollection',
+	features: [
+		{
+			type: 'Feature',
+			properties: { id: 'R2', route_name: '循環線' },
+			geometry: { type: 'MultiLineString', coordinates: [r2RoadCoords] },
+		},
+	],
+});
 ```
 
-(T2 は shape_id 空 → 仮想shapeのテストを兼ねる)
+(T2 は shape_id 空かつ R1 が routes.geojson に無い → 直線フォールバックのテストを兼ねる。T3 は routes.geojson マッチングのテスト用)
 
 - [ ] **Step 2: 失敗するテストを書く**
 
@@ -1140,10 +1404,10 @@ WD,1,1,1,1,1,0,0,20260401,20270331
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { convertFeed, unzipFeed } from './convert';
-import { FIXTURE_FILES } from './fixture';
+import { FIXTURE_FILES, FIXTURE_ROUTES_GEOJSON } from './fixture';
 
 describe('convertFeed', () => {
-	const bundle = convertFeed(FIXTURE_FILES);
+	const bundle = convertFeed(FIXTURE_FILES, FIXTURE_ROUTES_GEOJSON);
 
 	it('routes を変換する', () => {
 		expect(bundle.routes.R1).toEqual({ shortName: '1', longName: '駅前線', color: '#FF0000' });
@@ -1161,10 +1425,37 @@ describe('convertFeed', () => {
 		expect(t1?.keyframes[3][1]).toBeCloseTo(total, 0);
 	});
 
-	it('shape_id なしの trip は停留所座標の仮想shapeになる', () => {
+	it('shape も routes.geojson も無い trip は停留所座標の直線ポリラインになる', () => {
+		// T2 の route R1 は FIXTURE_ROUTES_GEOJSON に存在しない
 		const t2 = bundle.trips.find((t) => t.tripId === 'T2');
 		expect(t2?.shapeId).toBe('trip:T2');
 		expect(bundle.shapes['trip:T2'].coords.length).toBe(3);
+	});
+
+	it('shapes.txt が無い trip は routes.geojson の道路形状にマッチされる', () => {
+		const t3 = bundle.trips.find((t) => t.tripId === 'T3');
+		expect(t3?.shapeId.startsWith('route:R2:')).toBe(true);
+		const shape = bundle.shapes[t3?.shapeId ?? ''];
+		expect(shape.coords.length).toBeGreaterThan(10); // 停留所数(3)より密な道路頂点
+		// キーフレーム距離は単調増加
+		const dists = (t3?.keyframes ?? []).map((k) => k[1]);
+		expect(dists[0]).toBeLessThan(dists[dists.length - 1]);
+	});
+
+	it('形状ソースの内訳が記録される', () => {
+		expect(bundle.shapeSourceCounts).toEqual({ shapes: 1, route: 1, straight: 1 });
+	});
+
+	it('座標は6桁・距離は0.1m単位に丸められる', () => {
+		for (const shape of Object.values(bundle.shapes)) {
+			for (const [lng, lat] of shape.coords) {
+				expect(lng).toBeCloseTo(Math.round(lng * 1e6) / 1e6, 10);
+				expect(lat).toBeCloseTo(Math.round(lat * 1e6) / 1e6, 10);
+			}
+			for (const d of shape.cumDist) {
+				expect(d).toBeCloseTo(Math.round(d * 10) / 10, 10);
+			}
+		}
 	});
 
 	it('calendar が変換される', () => {
@@ -1204,8 +1495,14 @@ import { parseCsv } from './csv';
 import { cumulativeDistances } from './geo';
 import { buildKeyframes } from './keyframes';
 import { projectStopsToShape } from './projection';
+import {
+	MAX_ROUTE_SHAPE_ERROR_M,
+	matchStopsToRouteLines,
+	parseRouteLines,
+	type ShapeMatch,
+} from './routeShapes';
 import { parseGtfsTime } from './time';
-import type { FeedBundle, LngLat, RouteData, ShapeData, TripData } from './types';
+import type { FeedBundle, LngLat, RouteData, ShapeData, ShapeSource, TripData } from './types';
 
 /** GTFS zip を展開し、ファイル名(basename)→テキスト のマップを返す */
 export function unzipFeed(zip: Uint8Array): Record<string, string> {
@@ -1226,7 +1523,26 @@ interface StopTimeRow {
 	departure: number | null;
 }
 
-export function convertFeed(files: Record<string, string>): FeedBundle {
+function round6(v: number): number {
+	return Math.round(v * 1e6) / 1e6;
+}
+
+function round1(v: number): number {
+	return Math.round(v * 10) / 10;
+}
+
+function roundShape(shape: ShapeData): ShapeData {
+	return {
+		coords: shape.coords.map((c): LngLat => [round6(c[0]), round6(c[1])]),
+		cumDist: shape.cumDist.map(round1),
+	};
+}
+
+/**
+ * @param routeGeojson リポジトリ提供の routes.geojson テキスト。
+ *   shapes.txt を持たない trip の形状源として使う(任意)
+ */
+export function convertFeed(files: Record<string, string>, routeGeojson?: string): FeedBundle {
 	const stopRows = parseCsv(files['stops.txt'] ?? '');
 	const routeRows = parseCsv(files['routes.txt'] ?? '');
 	const tripRows = parseCsv(files['trips.txt'] ?? '');
@@ -1286,8 +1602,13 @@ export function convertFeed(files: Record<string, string>): FeedBundle {
 		});
 	}
 
+	const routeLines = routeGeojson ? parseRouteLines(routeGeojson) : {};
+	// 同一路線・同一停留所パターンの trip は多数あるためマッチング結果をキャッシュする
+	const matchCache = new Map<string, ShapeMatch | null>();
+
 	const trips: TripData[] = [];
 	const usedShapes = new Set<string>();
+	const shapeSourceCounts: Record<ShapeSource, number> = { shapes: 0, route: 0, straight: 0 };
 	for (const t of tripRows) {
 		const st = stByTrip.get(t.trip_id);
 		if (!st || st.length < 2) continue;
@@ -1298,15 +1619,43 @@ export function convertFeed(files: Record<string, string>): FeedBundle {
 			if (c) coords.push(c);
 		}
 		if (coords.length !== st.length) continue; // 座標欠損のあるtripは除外
-		let shapeId = t.shape_id;
-		if (!shapeId || !shapes[shapeId]) {
-			shapeId = `trip:${t.trip_id}`;
-			shapes[shapeId] = { coords, cumDist: cumulativeDistances(coords) };
+
+		// 形状の解決優先順位: shapes.txt → routes.geojson マッチング → 停留所直線
+		let shapeId: string;
+		let distances: number[];
+		let source: ShapeSource;
+		if (t.shape_id && shapes[t.shape_id]) {
+			shapeId = t.shape_id;
+			distances = projectStopsToShape(shapes[shapeId], coords);
+			source = 'shapes';
+		} else {
+			const cacheKey = `${t.route_id}|${st.map((s) => s.stopId).join(',')}`;
+			let match = matchCache.get(cacheKey);
+			if (match === undefined) {
+				const parts = routeLines[t.route_id];
+				match = parts ? matchStopsToRouteLines(parts, coords) : null;
+				if (match && match.maxError > MAX_ROUTE_SHAPE_ERROR_M) match = null;
+				matchCache.set(cacheKey, match);
+			}
+			if (match) {
+				shapeId = `route:${t.route_id}:${match.key}`;
+				if (!shapes[shapeId]) shapes[shapeId] = match.shape;
+				distances = match.distances;
+				source = 'route';
+			} else {
+				shapeId = `trip:${t.trip_id}`;
+				shapes[shapeId] = { coords, cumDist: cumulativeDistances(coords) };
+				distances = projectStopsToShape(shapes[shapeId], coords);
+				source = 'straight';
+			}
 		}
-		const distances = projectStopsToShape(shapes[shapeId], coords);
-		const keyframes = buildKeyframes(st, distances);
+
+		const keyframes = buildKeyframes(st, distances).map(
+			([sec, d]): [number, number] => [sec, round1(d)],
+		);
 		if (keyframes.length < 2) continue;
 		usedShapes.add(shapeId);
+		shapeSourceCounts[source]++;
 		trips.push({
 			tripId: t.trip_id,
 			routeId: t.route_id,
@@ -1316,7 +1665,11 @@ export function convertFeed(files: Record<string, string>): FeedBundle {
 		});
 	}
 	for (const id of Object.keys(shapes)) {
-		if (!usedShapes.has(id)) delete shapes[id];
+		if (!usedShapes.has(id)) {
+			delete shapes[id];
+			continue;
+		}
+		shapes[id] = roundShape(shapes[id]);
 	}
 
 	return {
@@ -1324,6 +1677,7 @@ export function convertFeed(files: Record<string, string>): FeedBundle {
 		routes,
 		shapes,
 		trips,
+		shapeSourceCounts,
 	};
 }
 ```
@@ -1571,7 +1925,7 @@ pnpm install
 
 ```ts
 import { strToU8, zipSync } from 'fflate';
-import { FIXTURE_FILES } from 'gtfs-core';
+import { FIXTURE_FILES, FIXTURE_ROUTES_GEOJSON } from 'gtfs-core';
 import { describe, expect, it } from 'vitest';
 import { runPipeline, type BucketLike, type GtfsFileEntry } from './run';
 
@@ -1618,6 +1972,7 @@ function fetcherFor(entries: GtfsFileEntry[]): typeof fetch {
 			return new Response(JSON.stringify({ code: 200, message: 'ok', body: entries }));
 		}
 		if (url.endsWith('feed.zip')) return new Response(FIXTURE_ZIP);
+		if (url.endsWith('routes.geojson')) return new Response(FIXTURE_ROUTES_GEOJSON);
 		if (url.endsWith('.geojson')) {
 			return new Response(JSON.stringify({ type: 'FeatureCollection', features: [] }));
 		}
@@ -1645,6 +2000,8 @@ describe('runPipeline', () => {
 			feeds: { id: string; status: string }[];
 		};
 		expect(index.feeds[0].id).toBe(id);
+		// フィクスチャ: T1=shapes.txt / T3=routes.geojsonマッチ / T2=直線フォールバック
+		expect(statuses[0].shapeSourceCounts).toEqual({ shapes: 1, route: 1, straight: 1 });
 	});
 
 	it('file_uid が同じなら unchanged でスキップする', async () => {
@@ -1725,6 +2082,8 @@ export interface FeedStatus {
 	toDate: string;
 	status: 'updated' | 'unchanged' | 'error';
 	error?: string;
+	/** trip の形状ソース内訳(shapes / route / straight)。updated 時のみ */
+	shapeSourceCounts?: Record<string, number>;
 }
 
 const API_BASE = 'https://api.gtfs-data.jp/v2';
@@ -1757,24 +2116,30 @@ export async function runPipeline({ bucket, fetcher, prefId }: PipelineDeps): Pr
 
 			const zipRes = await fetcher(entry.file_url);
 			if (!zipRes.ok) throw new Error(`zip fetch failed: ${zipRes.status}`);
-			const bundle = convertFeed(unzipFeed(new Uint8Array(await zipRes.arrayBuffer())));
-			await bucket.put(`feeds/${id}/bundle.json`, JSON.stringify(bundle));
 
-			const geojsons: [string, string | null][] = [
-				['stops.geojson', entry.file_stop_url],
-				['routes.geojson', entry.file_route_url],
-			];
-			for (const [key, url] of geojsons) {
-				if (!url) continue;
-				const res = await fetcher(url);
-				if (res.ok) await bucket.put(`feeds/${id}/${key}`, await res.text());
+			// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する
+			let routesText: string | null = null;
+			if (entry.file_route_url) {
+				const res = await fetcher(entry.file_route_url);
+				if (res.ok) routesText = await res.text();
+			}
+
+			const bundle = convertFeed(
+				unzipFeed(new Uint8Array(await zipRes.arrayBuffer())),
+				routesText ?? undefined,
+			);
+			await bucket.put(`feeds/${id}/bundle.json`, JSON.stringify(bundle));
+			if (routesText) await bucket.put(`feeds/${id}/routes.geojson`, routesText);
+			if (entry.file_stop_url) {
+				const res = await fetcher(entry.file_stop_url);
+				if (res.ok) await bucket.put(`feeds/${id}/stops.geojson`, await res.text());
 			}
 
 			await bucket.put(
 				`feeds/${id}/meta.json`,
 				JSON.stringify({ fileUid: entry.file_uid, lastUpdatedAt: entry.file_last_updated_at }),
 			);
-			statuses.push({ ...base, status: 'updated' });
+			statuses.push({ ...base, status: 'updated', shapeSourceCounts: bundle.shapeSourceCounts });
 		} catch (e) {
 			statuses.push({
 				...base,
@@ -2587,6 +2952,9 @@ git commit -m "docs: add project README"
 |---|---|
 | 群馬県全フィードの取得・変換(月次Cron) | Task 9 |
 | 停留所→shape射影(単調増加制約) | Task 4 |
+| shapes.txt なしフィードの形状補完(routes.geojsonマッチング)と直線フォールバック | Task 6.5, 7 |
+| 形状ソース内訳の記録(bundle / feeds.json) | Task 7, 9 |
+| 座標6桁・距離0.1m丸め(データ形式の選定理由) | Task 7 |
 | キーフレーム化・時刻補間 | Task 6, 8 |
 | 24時超・前日便の扱い | Task 6(time), 8(bus) |
 | R2データ形式(feeds.json / bundle.json / geojson) | Task 9 |
