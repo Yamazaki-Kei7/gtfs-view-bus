@@ -6,6 +6,8 @@ function todayIso(): string {
 	return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date());
 }
 
+// モジュールレベルの $state は Workers の同一 isolate 内で複数リクエストに共有される。
+// SSR 中に sim を書き換えるコードを追加してはならない(クライアント側でのみ変更すること)。
 export const sim = $state({
 	/** YYYY-MM-DD (input[type=date] 互換) */
 	date: todayIso(),
