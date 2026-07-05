@@ -2252,6 +2252,7 @@ export async function runPipeline({
 `pipeline/src/index.ts`:
 
 ```ts
+import type { BucketLike } from './run';
 import { runPipeline } from './run';
 
 interface Env {
@@ -2259,10 +2260,24 @@ interface Env {
 	GTFS_PREF_ID: string;
 }
 
+/** R2Bucket.put() は R2Object を返すが BucketLike は void を期待するため薄くラップする */
+function toBucketLike(bucket: R2Bucket): BucketLike {
+	return {
+		get: (key) => bucket.get(key),
+		put: async (key, value) => {
+			await bucket.put(key, value);
+		},
+	};
+}
+
 export default {
 	async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
 		ctx.waitUntil(
-			runPipeline({ bucket: env.DATA_BUCKET, fetcher: fetch, prefId: env.GTFS_PREF_ID }),
+			runPipeline({
+				bucket: toBucketLike(env.DATA_BUCKET),
+				fetcher: fetch,
+				prefId: env.GTFS_PREF_ID,
+			}),
 		);
 	},
 } satisfies ExportedHandler<Env>;
