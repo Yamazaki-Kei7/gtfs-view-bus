@@ -12,7 +12,7 @@ export function haversineMeters(a: LngLat, b: LngLat): number {
 }
 
 export function cumulativeDistances(coords: LngLat[]): number[] {
-	const cum: number[] = [0];
+	const cum: number[] = coords.length === 0 ? [] : [0];
 	for (let i = 1; i < coords.length; i++) {
 		cum.push(cum[i - 1] + haversineMeters(coords[i - 1], coords[i]));
 	}

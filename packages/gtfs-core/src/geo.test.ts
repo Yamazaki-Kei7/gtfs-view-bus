@@ -25,4 +25,8 @@ describe('cumulativeDistances', () => {
 		expect(cum[1]).toBeCloseTo(haversineMeters([139.0, 36.0], [139.01, 36.0]), 6);
 		expect(cum[2]).toBeGreaterThan(cum[1]);
 	});
+
+	it('空配列は空配列を返す(coords と同じ長さの契約)', () => {
+		expect(cumulativeDistances([])).toEqual([]);
+	});
 });
