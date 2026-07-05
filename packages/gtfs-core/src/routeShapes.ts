@@ -45,7 +45,7 @@ export interface ShapeMatch {
 	shape: ShapeData;
 	/** 各停留所の累積距離(単調非減少) */
 	distances: number[];
-	/** 停留所と射影位置の最大距離(m) */
+	/** 停留所と射影位置の最大距離(m)。連結候補ではパーツ間ギャップがペナルティとして下限になる */
 	maxError: number;
 }
 

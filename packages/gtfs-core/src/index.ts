@@ -7,3 +7,5 @@ export * from './calendar';
 export * from './keyframes';
 export * from './interpolate';
 export * from './routeShapes';
+export * from './convert';
+export * from './fixture';
