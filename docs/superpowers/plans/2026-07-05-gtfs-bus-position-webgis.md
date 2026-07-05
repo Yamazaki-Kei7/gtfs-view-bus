@@ -2651,7 +2651,8 @@ git commit -m "feat(app): add data loader and simulation state"
 	let map = $state<MaplibreMap | undefined>();
 	let data = $state<LoadedData | null>(null);
 	let loadError = $state<string | null>(null);
-	let selectedTripId = $state<string | null>(null);
+	// trip_id はフィード内でのみ一意なので、選択キーは feedId と組み合わせる
+	let selectedKey = $state<string | null>(null);
 
 	$effect(() => {
 		loadAll()
@@ -2667,8 +2668,10 @@ git commit -m "feat(app): add data loader and simulation state"
 	// ポップアップはクリック時のスナップショットではなく毎フレームの最新位置に追随させる
 	// (便が運行を終えたり日付が変わったら自動的に閉じる)
 	const selectedBus = $derived(
-		selectedTripId
-			? (buses.features.find((f) => f.properties.tripId === selectedTripId) ?? null)
+		selectedKey
+			? (buses.features.find(
+					(f) => `${f.properties.feedId}|${f.properties.tripId}` === selectedKey,
+				) ?? null)
 			: null,
 	);
 
@@ -2732,13 +2735,13 @@ git commit -m "feat(app): add data loader and simulation state"
 				onclick={(ev) => {
 					const f = ev.features?.[0];
 					if (f && f.geometry.type === 'Point') {
-						selectedTripId = String(f.properties.tripId);
+						selectedKey = `${String(f.properties.feedId)}|${String(f.properties.tripId)}`;
 					}
 				}}
 			/>
 		</GeoJSONSource>
 		{#if selectedBus}
-			<Popup lnglat={selectedBus.geometry.coordinates} onclose={() => (selectedTripId = null)}>
+			<Popup lnglat={selectedBus.geometry.coordinates} onclose={() => (selectedKey = null)}>
 				<div class="text-sm">
 					<div class="font-bold">{selectedBus.properties.routeName}</div>
 					<div class="text-gray-600">便: {selectedBus.properties.tripId}</div>
