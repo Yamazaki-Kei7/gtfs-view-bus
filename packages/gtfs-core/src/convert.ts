@@ -118,7 +118,12 @@ export function convertFeed(files: Record<string, string>, routeGeojson?: string
 	const trips: TripData[] = [];
 	const usedShapes = new Set<string>();
 	const shapeSourceCounts: Record<ShapeSource, number> = { shapes: 0, route: 0, straight: 0 };
+	// GTFS 上 trip_id は一意のはずだが、実フィードでは重複が稀にある。
+	// 最初の行を採用し、以降は直線フォールバックの shapeId 衝突を防ぐためスキップする
+	const seenTripIds = new Set<string>();
 	for (const t of tripRows) {
+		if (seenTripIds.has(t.trip_id)) continue;
+		seenTripIds.add(t.trip_id);
 		const st = stByTrip.get(t.trip_id);
 		if (!st || st.length < 2) continue;
 		st.sort((a, b) => a.seq - b.seq);

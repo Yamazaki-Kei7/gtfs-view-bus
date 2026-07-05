@@ -59,6 +59,21 @@ describe('convertFeed', () => {
 		expect(bundle.calendar.services.WD.days).toEqual([true, true, true, true, true, false, false]);
 		expect(bundle.calendar.exceptions['20260713'].WD).toBe(2);
 	});
+
+	it('重複した trip_id は最初の行が勝ち、以降はスキップされる', () => {
+		const files = {
+			...FIXTURE_FILES,
+			'trips.txt': `route_id,service_id,trip_id,shape_id
+R1,WD,T1,S1
+R1,WD,T1,S1
+R1,WD,T2,
+R2,WD,T3,
+`,
+		};
+		const dup = convertFeed(files, FIXTURE_ROUTES_GEOJSON);
+		expect(dup.trips.filter((t) => t.tripId === 'T1').length).toBe(1);
+		expect(dup.shapeSourceCounts).toEqual({ shapes: 1, route: 1, straight: 1 });
+	});
 });
 
 describe('unzipFeed', () => {
