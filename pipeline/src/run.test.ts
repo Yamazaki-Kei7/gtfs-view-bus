@@ -86,6 +86,15 @@ describe('runPipeline', () => {
 		expect(second[0].status).toBe('unchanged');
 	});
 
+	it('フィード一覧の取得失敗時は feeds.json に触れず reject する', async () => {
+		const bucket = fakeBucket();
+		bucket.store.set('feeds.json', '{"old":true}');
+		const impl = async (): Promise<Response> => new Response('error', { status: 500 });
+		const failingFetcher = impl as typeof fetch;
+		await expect(runPipeline({ bucket, fetcher: failingFetcher, prefId: '10' })).rejects.toThrow();
+		expect(bucket.store.get('feeds.json')).toBe('{"old":true}');
+	});
+
 	it('1フィードの失敗が他フィードを巻き込まない', async () => {
 		const bucket = fakeBucket();
 		const bad = entry({

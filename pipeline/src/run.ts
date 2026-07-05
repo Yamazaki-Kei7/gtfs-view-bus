@@ -96,6 +96,9 @@ export async function runPipeline({
 				if (res.ok) await bucket.put(`feeds/${id}/stops.geojson`, await res.text());
 			}
 
+			// meta.json は必ずこのフィードの最後の書き込みにすること: 更新完了のマーカーであり、
+			// 途中でクラッシュしても meta が残らず次回実行時に最初から再処理される(自己修復的な冪等性)。
+			// put の順序を入れ替えるとこの保証が静かに壊れる。
 			await bucket.put(
 				`feeds/${id}/meta.json`,
 				JSON.stringify({ fileUid: entry.file_uid, lastUpdatedAt: entry.file_last_updated_at }),
