@@ -6,3 +6,4 @@ export * from './projection';
 export * from './calendar';
 export * from './keyframes';
 export * from './interpolate';
+export * from './routeShapes';
