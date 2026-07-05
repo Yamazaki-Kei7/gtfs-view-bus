@@ -38,6 +38,7 @@
 - Create: `pnpm-workspace.yaml`(ルート)
 - Create: `package.json`(ルート)
 - Create: `.prettierrc`, `.prettierignore`
+- Create: `eslint.config.js`(ルート、全パッケージ共通)
 - Delete: `app/pnpm-workspace.yaml`(内容はルートへ移動)
 - Modify: `.gitignore`
 
@@ -72,16 +73,18 @@ rm app/pnpm-workspace.yaml
 	"scripts": {
 		"test": "pnpm -r run test",
 		"check": "pnpm -r run check",
+		"lint": "eslint .",
 		"format": "prettier --write .",
 		"format:check": "prettier --check ."
 	}
 }
 ```
 
-- [ ] **Step 4: prettier をルートに追加**
+- [ ] **Step 4: prettier と eslint をルートに追加**
 
 ```bash
 pnpm add -w -D prettier prettier-plugin-svelte
+pnpm add -w -D eslint @eslint/js typescript-eslint eslint-plugin-svelte eslint-config-prettier globals
 ```
 
 注意: `minimumReleaseAge` により公開7日未満のバージョンは解決されない。もし `ERR_PNPM_NO_MATCHING_VERSION` が出たら、それは正常動作(少し古いバージョンが入る)。
@@ -111,6 +114,55 @@ pnpm-lock.yaml
 docs
 ```
 
+- [ ] **Step 5b: eslint.config.js を作成**(flat config。TS + Svelte 全体に適用)
+
+`eslint.config.js`:
+
+```js
+import js from '@eslint/js';
+import prettier from 'eslint-config-prettier';
+import svelte from 'eslint-plugin-svelte';
+import globals from 'globals';
+import ts from 'typescript-eslint';
+
+export default ts.config(
+	js.configs.recommended,
+	...ts.configs.recommended,
+	...svelte.configs.recommended,
+	prettier,
+	...svelte.configs.prettier,
+	{
+		languageOptions: {
+			globals: { ...globals.browser, ...globals.node },
+		},
+	},
+	{
+		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
+		languageOptions: {
+			parserOptions: { parser: ts.parser },
+		},
+	},
+	{
+		rules: {
+			// プロジェクト規約: any / unknown を使わない
+			'@typescript-eslint/no-explicit-any': 'error',
+		},
+	},
+	{
+		ignores: [
+			'**/node_modules/',
+			'**/.svelte-kit/',
+			'**/dist/',
+			'**/.wrangler/',
+			'docs/',
+			'infra/',
+		],
+	},
+);
+```
+
+(`eslint-plugin-svelte` v3 は flat config が既定。v2 が入った場合は `svelte.configs['flat/recommended']` / `svelte.configs['flat/prettier']` に読み替える)
+
 - [ ] **Step 6: .gitignore に追記**
 
 既存 `.gitignore` の末尾に追加:
@@ -129,9 +181,10 @@ docs
 pnpm install
 pnpm format
 pnpm format:check
+pnpm lint
 ```
 
-Expected: `pnpm install` がルートで成功し、`pnpm format:check` が exit 0。
+Expected: `pnpm install` がルートで成功し、`pnpm format:check` と `pnpm lint` が exit 0。
 
 - [ ] **Step 8: Commit**
 
@@ -2806,6 +2859,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
+      - run: pnpm lint
       - run: pnpm --filter app run prepare
       - run: pnpm -r run check
       - run: pnpm -r run test
@@ -2866,10 +2920,10 @@ Expected: `"packageManager": "pnpm@10.x.x"` が追加される。
 - [ ] **Step 4: ローカルでCI相当を通す**
 
 ```bash
-pnpm format:check && pnpm -r run check && pnpm -r run test && pnpm --filter app build
+pnpm format:check && pnpm lint && pnpm -r run check && pnpm -r run test && pnpm --filter app build
 ```
 
-Expected: すべて exit 0。
+Expected: すべて exit 0。lint エラーが出た場合はこのタスク内で修正してから進む。
 
 - [ ] **Step 5: Commit**
 
@@ -2964,5 +3018,6 @@ git commit -m "docs: add project README"
 | 有効期間外の日付のUI表示 | Task 12 |
 | Terraform + wrangler の IaC | Task 13, 9, 10 |
 | GitHub Actions CI/CD(Environment secrets) | Task 14 |
+| ESLint による lint(ローカル + CI) | Task 1, 14 |
 | ユニットテスト(射影・補間・カレンダー・変換) | Task 2〜8 |
 ```
