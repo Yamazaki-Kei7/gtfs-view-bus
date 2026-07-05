@@ -1,0 +1,10 @@
+packages:
+  - app
+  - pipeline
+  - packages/*
+
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
+
+minimumReleaseAge: 10080

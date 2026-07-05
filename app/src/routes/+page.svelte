@@ -2,8 +2,8 @@
 <p class="mt-4 text-lg text-gray-600">Tailwind CSS is working!</p>
 
 <style lang="postcss">
-  @reference "tailwindcss";
-  :global(html) {
-    background-color: theme(--color-gray-100);
-  }
+	@reference "tailwindcss";
+	:global(html) {
+		background-color: theme(--color-gray-100);
+	}
 </style>

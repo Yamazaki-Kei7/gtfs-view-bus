@@ -39,3 +39,12 @@ temp/
 
 # Git worktrees
 .worktrees/
+
+# Wrangler and deployment
+.wrangler/
+.dev.vars
+
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
