@@ -2623,19 +2623,27 @@ git commit -m "feat(app): add data loader and simulation state"
 
 ```svelte
 <script lang="ts">
-	import {
-		CircleLayer,
-		GeoJSONSource,
-		LineLayer,
-		MapLibre,
-		Popup,
-		RasterLayer,
-		RasterTileSource,
-	} from 'svelte-maplibre-gl';
+	import { CircleLayer, GeoJSONSource, LineLayer, MapLibre, Popup } from 'svelte-maplibre-gl';
+	import type { StyleSpecification } from 'maplibre-gl';
 	import { busFeatureCollection, type BusFeatureCollection } from 'gtfs-core';
 	import Controls from '$lib/Controls.svelte';
 	import { loadAll, type LoadedData } from '$lib/data';
 	import { MAX_TIME_SEC, sim } from '$lib/sim.svelte';
+
+	// OSMベースマップは初期スタイルに含める(RasterTileSource コンポーネント経由だと
+	// タイルが読み込まれない事象があるため、スタイルオブジェクトで確実に描画する)
+	const BASE_STYLE: StyleSpecification = {
+		version: 8,
+		sources: {
+			osm: {
+				type: 'raster',
+				tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+				tileSize: 256,
+				attribution: '© OpenStreetMap contributors',
+			},
+		},
+		layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+	};
 
 	let data = $state<LoadedData | null>(null);
 	let loadError = $state<string | null>(null);
@@ -2674,19 +2682,7 @@ git commit -m "feat(app): add data loader and simulation state"
 </script>
 
 <div class="relative h-screen w-screen">
-	<MapLibre
-		class="h-full w-full"
-		style={{ version: 8, sources: {}, layers: [] }}
-		center={[139.2, 36.35]}
-		zoom={10}
-	>
-		<RasterTileSource
-			tiles={['https://tile.openstreetmap.org/{z}/{x}/{y}.png']}
-			tileSize={256}
-			attribution="© OpenStreetMap contributors"
-		>
-			<RasterLayer />
-		</RasterTileSource>
+	<MapLibre class="h-full w-full" style={BASE_STYLE} center={[139.2, 36.35]} zoom={10}>
 		{#if data}
 			<GeoJSONSource data={data.routes}>
 				<LineLayer paint={{ 'line-color': '#3b82f6', 'line-width': 2, 'line-opacity': 0.5 }} />
