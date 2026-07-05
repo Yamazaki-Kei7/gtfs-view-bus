@@ -2624,7 +2624,7 @@ git commit -m "feat(app): add data loader and simulation state"
 ```svelte
 <script lang="ts">
 	import { CircleLayer, GeoJSONSource, LineLayer, MapLibre, Popup } from 'svelte-maplibre-gl';
-	import type { StyleSpecification } from 'maplibre-gl';
+	import type { Map as MaplibreMap, StyleSpecification } from 'maplibre-gl';
 	import { busFeatureCollection, type BusFeatureCollection } from 'gtfs-core';
 	import Controls from '$lib/Controls.svelte';
 	import { loadAll, type LoadedData } from '$lib/data';
@@ -2645,6 +2645,7 @@ git commit -m "feat(app): add data loader and simulation state"
 		layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
 	};
 
+	let map = $state<MaplibreMap | undefined>();
 	let data = $state<LoadedData | null>(null);
 	let loadError = $state<string | null>(null);
 	let selected = $state<{ lnglat: [number, number]; routeName: string; tripId: string } | null>(
@@ -2661,6 +2662,19 @@ git commit -m "feat(app): add data loader and simulation state"
 	const buses = $derived(
 		data ? busFeatureCollection(data.feeds, sim.date.replaceAll('-', ''), sim.timeSec) : EMPTY_FC,
 	);
+
+	// 非表示タブ/プリレンダリング中に初期化されると初回描画が抜けることがあるため、
+	// マウント直後と再表示時に resize で再描画を促す
+	$effect(() => {
+		if (!map) return;
+		const kick = () => map?.resize();
+		const t = setTimeout(kick, 100);
+		document.addEventListener('visibilitychange', kick);
+		return () => {
+			clearTimeout(t);
+			document.removeEventListener('visibilitychange', kick);
+		};
+	});
 
 	// 再生ループ: 実時間 dt 秒 → シミュレーション dt×speed 秒
 	$effect(() => {
@@ -2682,7 +2696,7 @@ git commit -m "feat(app): add data loader and simulation state"
 </script>
 
 <div class="relative h-screen w-screen">
-	<MapLibre class="h-full w-full" style={BASE_STYLE} center={[139.2, 36.35]} zoom={10}>
+	<MapLibre bind:map class="h-full w-full" style={BASE_STYLE} center={[139.2, 36.35]} zoom={10}>
 		{#if data}
 			<GeoJSONSource data={data.routes}>
 				<LineLayer paint={{ 'line-color': '#3b82f6', 'line-width': 2, 'line-opacity': 0.5 }} />
