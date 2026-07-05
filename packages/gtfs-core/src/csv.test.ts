@@ -25,6 +25,24 @@ describe('parseCsv', () => {
 		]);
 	});
 
+	it('CRのみの改行を行区切りとして扱える', () => {
+		const rows = parseCsv('a,b\r1,2\r3,4');
+		expect(rows).toEqual([
+			{ a: '1', b: '2' },
+			{ a: '3', b: '4' },
+		]);
+	});
+
+	it('クォート内のCRはフィールド内容として保持される', () => {
+		const rows = parseCsv('a,b\n1,"x\ry"');
+		expect(rows).toEqual([{ a: '1', b: 'x\ry' }]);
+	});
+
+	it('EOFで閉じられていないクォートは寛容に閉じる', () => {
+		const rows = parseCsv('a,b\n1,"unterminated');
+		expect(rows).toEqual([{ a: '1', b: 'unterminated' }]);
+	});
+
 	it('欠けた列は空文字になる', () => {
 		const rows = parseCsv('a,b,c\n1,2\n');
 		expect(rows[0]).toEqual({ a: '1', b: '2', c: '' });
