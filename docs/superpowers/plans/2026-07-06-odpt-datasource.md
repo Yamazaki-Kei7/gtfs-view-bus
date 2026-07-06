@@ -191,7 +191,7 @@ export interface FeedDescriptor {
 	name: string;
 	orgName: string;
 	license: string | null;
-	/** ODPTでは提供されないため空文字(アプリ未使用) */
+	/** fromDate/toDate はODPTでは提供されないため空文字(アプリ未使用) */
 	fromDate: string;
 	toDate: string;
 	source: SourceId;
@@ -320,25 +320,25 @@ export function createGtfsDataJpSource(prefId: string): FeedSource {
 			const listRes = await fetcher(`${API_BASE}/files?pref=${prefId}`);
 			if (!listRes.ok) throw new Error(`feed list fetch failed: ${listRes.status}`);
 			const list = (await listRes.json()) as FilesResponse;
-			return list.body.map(
-				(entry): FeedDescriptor => ({
-					id: `${entry.organization_id}~${entry.feed_id}~${entry.file_from_date}`,
-					name: entry.feed_name,
-					orgName: entry.organization_name,
-					license: entry.feed_license_id,
-					fromDate: entry.file_from_date,
-					toDate: entry.file_to_date,
-					source: 'gtfs-data.jp',
-					versionId: entry.file_uid,
-					stopsGeojsonUrl: entry.file_stop_url ?? undefined,
-					routesGeojsonUrl: entry.file_route_url ?? undefined,
-					async fetchZip(f) {
-						const zipRes = await f(entry.file_url);
-						if (!zipRes.ok) throw new Error(`zip fetch failed: ${zipRes.status}`);
-						return new Uint8Array(await zipRes.arrayBuffer());
-					},
-				}),
-			);
+			// HTTP 200でエラーボディが返るケースの診断性を上げる実行時ガード
+			if (!Array.isArray(list.body)) throw new Error('feed list response malformed');
+			return list.body.map((entry): FeedDescriptor => ({
+				id: `${entry.organization_id}~${entry.feed_id}~${entry.file_from_date}`,
+				name: entry.feed_name,
+				orgName: entry.organization_name,
+				license: entry.feed_license_id,
+				fromDate: entry.file_from_date,
+				toDate: entry.file_to_date,
+				source: 'gtfs-data.jp',
+				versionId: entry.file_uid,
+				stopsGeojsonUrl: entry.file_stop_url ?? undefined,
+				routesGeojsonUrl: entry.file_route_url ?? undefined,
+				async fetchZip(f) {
+					const zipRes = await f(entry.file_url);
+					if (!zipRes.ok) throw new Error(`zip fetch failed: ${zipRes.status}`);
+					return new Uint8Array(await zipRes.arrayBuffer());
+				},
+			}));
 		},
 	};
 }
@@ -458,12 +458,42 @@ interface OdptFeedDef {
 export const ODPT_FEEDS: OdptFeedDef[] = [
 	{ operator: 'TakasakiCity', feed: 'yosiibus', name: 'よしいバス', orgName: '高崎市' },
 	{ operator: 'GunmaBus', feed: 'AllLines', name: '群馬バス(全路線)', orgName: '群馬バス' },
-	{ operator: 'GunmachuoBus', feed: 'AllLines', name: '群馬中央バス(全路線)', orgName: '群馬中央バス' },
-	{ operator: 'JoshinKankoBus', feed: 'AllLines', name: '上信観光バス(全路線)', orgName: '上信観光バス' },
-	{ operator: 'JoshinHire', feed: 'AllLines', name: '上信ハイヤー(全路線)', orgName: '上信ハイヤー' },
-	{ operator: 'Kan_etsuTransportation', feed: 'AllLines', name: '関越交通(全路線)', orgName: '関越交通' },
-	{ operator: 'NipponChuoBus', feed: 'Maebashi_Area', name: '日本中央バス(前橋エリア)', orgName: '日本中央バス' },
-	{ operator: 'NagaiTransportation', feed: 'AllLines', name: '永井運輸(全路線)', orgName: '永井運輸' },
+	{
+		operator: 'GunmachuoBus',
+		feed: 'AllLines',
+		name: '群馬中央バス(全路線)',
+		orgName: '群馬中央バス',
+	},
+	{
+		operator: 'JoshinKankoBus',
+		feed: 'AllLines',
+		name: '上信観光バス(全路線)',
+		orgName: '上信観光バス',
+	},
+	{
+		operator: 'JoshinHire',
+		feed: 'AllLines',
+		name: '上信ハイヤー(全路線)',
+		orgName: '上信ハイヤー',
+	},
+	{
+		operator: 'Kan_etsuTransportation',
+		feed: 'AllLines',
+		name: '関越交通(全路線)',
+		orgName: '関越交通',
+	},
+	{
+		operator: 'NipponChuoBus',
+		feed: 'Maebashi_Area',
+		name: '日本中央バス(前橋エリア)',
+		orgName: '日本中央バス',
+	},
+	{
+		operator: 'NagaiTransportation',
+		feed: 'AllLines',
+		name: '永井運輸(全路線)',
+		orgName: '永井運輸',
+	},
 ];
 
 const API_BASE = 'https://api-public.odpt.org/api/v4/files/odpt';
@@ -472,7 +502,7 @@ function zipUrl(def: OdptFeedDef): string {
 	return `${API_BASE}/${def.operator}/${def.feed}.zip?date=current`;
 }
 
-async function sha256Hex(data: Uint8Array): Promise<string> {
+async function sha256Hex(data: Uint8Array<ArrayBuffer>): Promise<string> {
 	const digest = await crypto.subtle.digest('SHA-256', data);
 	return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -579,7 +609,10 @@ import { runPipeline, type BucketLike } from './run';
 import { createGtfsDataJpSource, type GtfsFileEntry } from './sources/gtfsDataJp';
 import type { FeedDescriptor, FeedSource } from './sources/types';
 
-function fakeBucket(): BucketLike & { store: Map<string, string>; deleted: string[] } {
+function fakeBucket(options?: {
+	/** listの1ページあたり件数。指定するとtruncated/cursorのページングを模す */
+	listPageSize?: number;
+}): BucketLike & { store: Map<string, string>; deleted: string[] } {
 	const store = new Map<string, string>();
 	const deleted: string[] = [];
 	return {
@@ -592,10 +625,15 @@ function fakeBucket(): BucketLike & { store: Map<string, string>; deleted: strin
 		async put(key: string, value: string) {
 			store.set(key, value);
 		},
-		async list({ prefix }: { prefix: string; cursor?: string }) {
+		async list({ prefix, cursor }: { prefix: string; cursor?: string }) {
+			const keys = [...store.keys()].filter((k) => k.startsWith(prefix));
+			const start = cursor ? Number(cursor) : 0;
+			const size = options?.listPageSize ?? keys.length;
+			const truncated = start + size < keys.length;
 			return {
-				objects: [...store.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })),
-				truncated: false,
+				objects: keys.slice(start, start + size).map((key) => ({ key })),
+				truncated,
+				cursor: truncated ? String(start + size) : undefined,
 			};
 		},
 		async delete(keys: string[]) {
@@ -764,6 +802,25 @@ describe('runPipeline', () => {
 		expect(bucket.store.has('feeds/testorg~testfeed~2026-04-01/bundle.json')).toBe(true);
 	});
 
+	it('複数ページにまたがる孤児キーも全て削除する', async () => {
+		const bucket = fakeBucket({ listPageSize: 2 });
+		bucket.store.set('feeds/orphan~a~1/bundle.json', '{}');
+		bucket.store.set('feeds/orphan~a~1/meta.json', '{}');
+		bucket.store.set('feeds/orphan~b~2/bundle.json', '{}');
+		bucket.store.set('feeds/orphan~b~2/meta.json', '{}');
+		bucket.store.set('feeds/orphan~c~3/bundle.json', '{}');
+		await runPipeline({
+			bucket,
+			fetcher: fetcherFor([entry({})]),
+			sources: [createGtfsDataJpSource('10')],
+		});
+		// アクティブなフィードのキーは残り、孤児キーは全ページ分削除される
+		const remaining = [...bucket.store.keys()].filter((k) => k.startsWith('feeds/orphan'));
+		expect(remaining).toHaveLength(0);
+		expect(bucket.deleted).toHaveLength(5);
+		expect(bucket.store.has('feeds/testorg~testfeed~2026-04-01/bundle.json')).toBe(true);
+	});
+
 	it('エラーになったフィードの既存データは削除しない', async () => {
 		const bucket = fakeBucket();
 		const bad = entry({
@@ -801,6 +858,8 @@ describe('runPipeline', () => {
 			}),
 		);
 		bucket.store.set('feeds/odpt~A~B/bundle.json', '{}');
+		// どのソースにも属さない孤児キー: 掃除が誤って実行されると消えてしまう監視対象
+		bucket.store.set('feeds/orphan~X~Y/bundle.json', '{}');
 		const failingSource: FeedSource = {
 			sourceId: 'odpt',
 			listFeeds: () => Promise.reject(new Error('down')),
@@ -814,6 +873,8 @@ describe('runPipeline', () => {
 		expect(statuses[0].id).toBe('odpt~A~B');
 		expect(bucket.deleted).toHaveLength(0);
 		expect(bucket.store.has('feeds/odpt~A~B/bundle.json')).toBe(true);
+		// 一覧失敗時は掃除自体がスキップされるため孤児キーも残る
+		expect(bucket.store.has('feeds/orphan~X~Y/bundle.json')).toBe(true);
 	});
 
 	it('片側ソースの一覧失敗がもう片方の処理を妨げない', async () => {
@@ -905,11 +966,13 @@ export async function runPipeline({
 		let descriptors: FeedDescriptor[];
 		try {
 			descriptors = await source.listFeeds(fetcher);
-		} catch {
+		} catch (e) {
 			// 一覧取得に失敗したソースは前回のエントリをそのまま引き継ぐ(地図からの全消え防止)。
+			// 引き継いだエントリの status は前回実行時の値のまま残る点に注意。
 			// この実行では掃除もスキップする(全フィードを孤児と誤認した全削除の防止)
+			console.error(`source list failed: ${source.sourceId}`, e);
 			anyListFailed = true;
-			statuses.push(...(prev?.feeds.filter((f) => f.source === source.sourceId) ?? []));
+			statuses.push(...(prev?.feeds?.filter((f) => f.source === source.sourceId) ?? []));
 			continue;
 		}
 		for (const d of descriptors) {
@@ -954,17 +1017,21 @@ async function processFeed(
 	try {
 		const metaObj = await bucket.get(`feeds/${d.id}/meta.json`);
 		const meta = metaObj ? (JSON.parse(await metaObj.text()) as FeedMeta) : null;
-		if (meta && (meta.versionId ?? meta.fileUid) === d.versionId) {
+		// versionId '' は版数解決に失敗したエラー記述子(ODPT)なので unchanged 扱いにしない
+		if (meta && d.versionId !== '' && (meta.versionId ?? meta.fileUid) === d.versionId) {
 			return { ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts };
 		}
 
 		const zip = await d.fetchZip(fetcher);
 
-		// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する
+		// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する。
+		// ソースがURLを宣言しているのに取得できない場合は throw してフィード単位のエラーにする:
+		// 黙って生成フォールバックすると劣化データ(直線化bundle等)が新versionIdで固定されてしまう
 		let routesText: string | null = null;
 		if (d.routesGeojsonUrl) {
 			const res = await fetcher(d.routesGeojsonUrl);
-			if (res.ok) routesText = await res.text();
+			if (!res.ok) throw new Error(`routes geojson fetch failed: ${res.status}`);
+			routesText = await res.text();
 		}
 
 		const files = unzipFeed(zip);
@@ -978,7 +1045,8 @@ async function processFeed(
 		let stopsText: string | null = null;
 		if (d.stopsGeojsonUrl) {
 			const res = await fetcher(d.stopsGeojsonUrl);
-			if (res.ok) stopsText = await res.text();
+			if (!res.ok) throw new Error(`stops geojson fetch failed: ${res.status}`);
+			stopsText = await res.text();
 		}
 		await bucket.put(
 			`feeds/${d.id}/stops.geojson`,
@@ -1026,11 +1094,15 @@ async function cleanupOrphans(bucket: BucketLike, activeIds: Set<string>): Promi
 - meta の `fileUid` → `versionId`（読み取りは両対応）。`lastUpdatedAt` は未使用のため廃止
 - stops/routes GeoJSONはソース提供が無ければ生成して必ず書く
 - 掃除・前回feeds.json引き継ぎを追加
+- 宣言済みの routes/stops GeoJSON URL が非okの場合は生成フォールバックへ黒黙移行せず throw する（劣化データが新versionIdで焼き付くのを防止）
+- listFeeds失敗時に `console.error` でログを残す
+- 前回feeds.json引き継ぎは `prev?.feeds?.filter(...)` でoptional chainingを強化
+- unchanged判定に `d.versionId !== ''` ガードを追加（版数解決失敗の記述子を誤ってunchanged扱いしないため）
 
 - [ ] **Step 4: テストが通ることを確認**
 
 Run: `pnpm --filter pipeline test`
-Expected: 全テストPASS（run 9件 + sources 7件）
+Expected: 全テストPASS（run 10件 + sources 7件）
 
 ※ この時点で `pipeline/src/index.ts` は旧 `runPipeline` シグネチャ（`prefId`）を参照しており型エラーになるが、次タスクで修正する。`vitest` はテスト対象のみコンパイルするためテストは通る。
 
@@ -1276,3 +1348,4 @@ git push -u origin feature/odpt-datasource
 - ODPTフィードのURL・ライセンスの調査記録は `.tmp/gtfs-takasaki-maebashi-research.md`（未コミットの作業メモ）
 - 「meta.json を最後に書く」順序は絶対に崩さない（冪等性マーカー）
 - 掃除は「全ソースの一覧取得が成功した実行」でのみ行う
+- 既知の受容リスク: gtfs-data.jpの一覧APIがHTTP 200で空配列 body: [] を返す異常系では、全フィードが孤児掃除される（listFeedsのrejectのみが掃除スキップの条件）。データは再生成可能なキャッシュであり、次回成功実行で自己回復するため受容する。
