@@ -29,6 +29,9 @@
 			.map((s) => SOURCE_CREDITS[s] ?? s)
 			.join(' / '),
 	);
+
+	// データ出典は既定で畳む(地図領域を優先。ⓘボタンで開閉)
+	let attribOpen = $state(false);
 </script>
 
 <div
@@ -98,12 +101,51 @@
 			{/each}
 		</div>
 	</div>
-	<div class="text-xs leading-relaxed text-mi-slate-500">
-		データ: {#each feedInfos as f (f.id)}{f.name}({f.license ?? 'ライセンス不明'}{f.status ===
-			'error'
-				? '・更新失敗'
-				: ''})
-		{/each}
-		— {credits} / 地図: © OpenStreetMap contributors | MapLibre
+	<div class="flex flex-col">
+		<button
+			onclick={() => (attribOpen = !attribOpen)}
+			title="データの出典"
+			class="flex items-center gap-1.5 self-start py-0.5 text-[11px] leading-4 font-semibold text-mi-slate-500 transition-colors hover:text-mi-teal-600"
+		>
+			<svg
+				width="13"
+				height="13"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line
+					x1="12"
+					y1="8"
+					x2="12.01"
+					y2="8"
+				></line></svg
+			>
+			<span>データの出典</span>
+			<svg
+				width="13"
+				height="13"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2.2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				class="transition-transform {attribOpen ? 'rotate-180' : ''}"
+				><polyline points="6 9 12 15 18 9"></polyline></svg
+			>
+		</button>
+		{#if attribOpen}
+			<div class="pt-1 text-xs leading-relaxed text-mi-slate-500">
+				データ: {#each feedInfos as f (f.id)}{f.name}({f.license ?? 'ライセンス不明'}{f.status ===
+					'error'
+						? '・更新失敗'
+						: ''})
+				{/each}
+				— {credits} / 地図: © OpenStreetMap contributors | MapLibre
+			</div>
+		{/if}
 	</div>
 </div>
