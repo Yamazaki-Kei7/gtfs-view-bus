@@ -1,6 +1,6 @@
 # gtfs-view-bus
 
-群馬県のGTFSフィード(gtfs-data.jp)をもとに、指定日時のバス推定位置を地図上に表示するWebGIS。
+群馬県のGTFSフィード(gtfs-data.jp・公共交通オープンデータセンター)をもとに、指定日時のバス推定位置を地図上に表示するWebGIS。
 
 - 設計書: `docs/superpowers/specs/2026-07-05-gtfs-bus-position-webgis-design.md`
 - 実装計画: `docs/superpowers/plans/2026-07-05-gtfs-bus-position-webgis.md`
@@ -49,5 +49,5 @@ just を使わない場合の生コマンドは `justfile` を参照。
 
 ## ライセンス・出典
 
-- バスデータ: GTFSデータリポジトリ(gtfs-data.jp)の各事業者フィード(CC BY 4.0 等、feeds.json に記載)
+- バスデータ: GTFSデータリポジトリ(gtfs-data.jp)および公共交通オープンデータセンター(ODPT)の各事業者フィード(CC BY 4.0 等、feeds.json に記載)
 - 地図タイル: © OpenStreetMap contributors

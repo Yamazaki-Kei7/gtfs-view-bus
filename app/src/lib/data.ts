@@ -8,6 +8,8 @@ export interface FeedIndexEntry {
 	fromDate: string;
 	toDate: string;
 	status: string;
+	/** 取得元レジストリ。旧feeds.json(移行前)には無いためoptional */
+	source?: string;
 }
 
 export interface FeedIndex {
