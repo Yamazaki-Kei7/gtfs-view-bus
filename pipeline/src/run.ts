@@ -1,35 +1,21 @@
-import { convertFeed, unzipFeed } from 'gtfs-core';
-
-export interface GtfsFileEntry {
-	organization_id: string;
-	organization_name: string;
-	feed_id: string;
-	feed_name: string;
-	feed_license_id: string | null;
-	file_uid: string;
-	file_from_date: string;
-	file_to_date: string;
-	file_url: string;
-	file_stop_url: string | null;
-	file_route_url: string | null;
-	file_last_updated_at: string;
-}
-
-interface FilesResponse {
-	code: number;
-	body: GtfsFileEntry[];
-}
+import { convertFeed, shapesToGeojson, stopsToGeojson, unzipFeed } from 'gtfs-core';
+import type { FeedDescriptor, FeedSource, SourceId } from './sources/types';
 
 /** R2Bucket と構造的に互換な最小インターフェース(テスト差し替え用) */
 export interface BucketLike {
 	get(key: string): Promise<{ text(): Promise<string> } | null>;
 	put(key: string, value: string): Promise<void>;
+	list(options: {
+		prefix: string;
+		cursor?: string;
+	}): Promise<{ objects: { key: string }[]; truncated: boolean; cursor?: string }>;
+	delete(keys: string[]): Promise<void>;
 }
 
 export interface PipelineDeps {
 	bucket: BucketLike;
 	fetcher: typeof fetch;
-	prefId: string;
+	sources: FeedSource[];
 }
 
 export interface FeedStatus {
@@ -39,86 +25,50 @@ export interface FeedStatus {
 	license: string | null;
 	fromDate: string;
 	toDate: string;
+	source: SourceId;
 	status: 'updated' | 'unchanged' | 'error';
 	error?: string;
 	/** trip の形状ソース内訳(shapes / route / straight)。unchanged 時は meta.json から引き継ぐ */
 	shapeSourceCounts?: Record<string, number>;
 }
 
-const API_BASE = 'https://api.gtfs-data.jp/v2';
+interface FeedsIndex {
+	generatedAt: string;
+	feeds: FeedStatus[];
+}
+
+interface FeedMeta {
+	versionId?: string;
+	/** 旧形式のキー(fileUid時代)。読み取り時のみ解釈する */
+	fileUid?: string;
+	shapeSourceCounts?: Record<string, number>;
+}
+
+/** R2の一括deleteは1回1000キーまで */
+const DELETE_BATCH = 1000;
 
 export async function runPipeline({
 	bucket,
 	fetcher,
-	prefId,
+	sources,
 }: PipelineDeps): Promise<FeedStatus[]> {
-	const listRes = await fetcher(`${API_BASE}/files?pref=${prefId}`);
-	if (!listRes.ok) throw new Error(`feed list fetch failed: ${listRes.status}`);
-	const list = (await listRes.json()) as FilesResponse;
-
+	const prev = await readIndex(bucket);
 	const statuses: FeedStatus[] = [];
-	for (const entry of list.body) {
-		const id = `${entry.organization_id}~${entry.feed_id}~${entry.file_from_date}`;
-		const base = {
-			id,
-			name: entry.feed_name,
-			orgName: entry.organization_name,
-			license: entry.feed_license_id,
-			fromDate: entry.file_from_date,
-			toDate: entry.file_to_date,
-		};
+	let anyListFailed = false;
+
+	for (const source of sources) {
+		let descriptors: FeedDescriptor[];
 		try {
-			const metaObj = await bucket.get(`feeds/${id}/meta.json`);
-			const meta = metaObj
-				? (JSON.parse(await metaObj.text()) as {
-						fileUid: string;
-						shapeSourceCounts?: Record<string, number>;
-					})
-				: null;
-			if (meta && meta.fileUid === entry.file_uid) {
-				statuses.push({ ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts });
-				continue;
-			}
-
-			const zipRes = await fetcher(entry.file_url);
-			if (!zipRes.ok) throw new Error(`zip fetch failed: ${zipRes.status}`);
-
-			// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する
-			let routesText: string | null = null;
-			if (entry.file_route_url) {
-				const res = await fetcher(entry.file_route_url);
-				if (res.ok) routesText = await res.text();
-			}
-
-			const bundle = convertFeed(
-				unzipFeed(new Uint8Array(await zipRes.arrayBuffer())),
-				routesText ?? undefined,
-			);
-			await bucket.put(`feeds/${id}/bundle.json`, JSON.stringify(bundle));
-			if (routesText) await bucket.put(`feeds/${id}/routes.geojson`, routesText);
-			if (entry.file_stop_url) {
-				const res = await fetcher(entry.file_stop_url);
-				if (res.ok) await bucket.put(`feeds/${id}/stops.geojson`, await res.text());
-			}
-
-			// meta.json は必ずこのフィードの最後の書き込みにすること: 更新完了のマーカーであり、
-			// 途中でクラッシュしても meta が残らず次回実行時に最初から再処理される(自己修復的な冪等性)。
-			// put の順序を入れ替えるとこの保証が静かに壊れる。
-			await bucket.put(
-				`feeds/${id}/meta.json`,
-				JSON.stringify({
-					fileUid: entry.file_uid,
-					lastUpdatedAt: entry.file_last_updated_at,
-					shapeSourceCounts: bundle.shapeSourceCounts,
-				}),
-			);
-			statuses.push({ ...base, status: 'updated', shapeSourceCounts: bundle.shapeSourceCounts });
-		} catch (e) {
-			statuses.push({
-				...base,
-				status: 'error',
-				error: e instanceof Error ? e.message : String(e),
-			});
+			descriptors = await source.listFeeds(fetcher);
+		} catch {
+			// 一覧取得に失敗したソースは前回のエントリをそのまま引き継ぐ(地図からの全消え防止)。
+			// この実行では掃除もスキップする(全フィードを孤児と誤認した全削除の防止)
+			anyListFailed = true;
+			statuses.push(...(prev?.feeds.filter((f) => f.source === source.sourceId) ?? []));
+			continue;
+		}
+		for (const d of descriptors) {
+			statuses.push(await processFeed(bucket, fetcher, d));
 		}
 	}
 
@@ -126,5 +76,100 @@ export async function runPipeline({
 		'feeds.json',
 		JSON.stringify({ generatedAt: new Date().toISOString(), feeds: statuses }),
 	);
+	if (!anyListFailed) {
+		await cleanupOrphans(bucket, new Set(statuses.map((s) => s.id)));
+	}
 	return statuses;
+}
+
+async function readIndex(bucket: BucketLike): Promise<FeedsIndex | null> {
+	const obj = await bucket.get('feeds.json');
+	if (!obj) return null;
+	try {
+		return JSON.parse(await obj.text()) as FeedsIndex;
+	} catch {
+		return null;
+	}
+}
+
+async function processFeed(
+	bucket: BucketLike,
+	fetcher: typeof fetch,
+	d: FeedDescriptor,
+): Promise<FeedStatus> {
+	const base = {
+		id: d.id,
+		name: d.name,
+		orgName: d.orgName,
+		license: d.license,
+		fromDate: d.fromDate,
+		toDate: d.toDate,
+		source: d.source,
+	};
+	try {
+		const metaObj = await bucket.get(`feeds/${d.id}/meta.json`);
+		const meta = metaObj ? (JSON.parse(await metaObj.text()) as FeedMeta) : null;
+		if (meta && (meta.versionId ?? meta.fileUid) === d.versionId) {
+			return { ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts };
+		}
+
+		const zip = await d.fetchZip(fetcher);
+
+		// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する
+		let routesText: string | null = null;
+		if (d.routesGeojsonUrl) {
+			const res = await fetcher(d.routesGeojsonUrl);
+			if (res.ok) routesText = await res.text();
+		}
+
+		const files = unzipFeed(zip);
+		const bundle = convertFeed(files, routesText ?? undefined);
+		await bucket.put(`feeds/${d.id}/bundle.json`, JSON.stringify(bundle));
+		await bucket.put(
+			`feeds/${d.id}/routes.geojson`,
+			routesText ?? JSON.stringify(shapesToGeojson(bundle)),
+		);
+
+		let stopsText: string | null = null;
+		if (d.stopsGeojsonUrl) {
+			const res = await fetcher(d.stopsGeojsonUrl);
+			if (res.ok) stopsText = await res.text();
+		}
+		await bucket.put(
+			`feeds/${d.id}/stops.geojson`,
+			stopsText ?? JSON.stringify(stopsToGeojson(files)),
+		);
+
+		// meta.json は必ずこのフィードの最後の書き込みにすること: 更新完了のマーカーであり、
+		// 途中でクラッシュしても meta が残らず次回実行時に最初から再処理される(自己修復的な冪等性)。
+		// put の順序を入れ替えるとこの保証が静かに壊れる。
+		await bucket.put(
+			`feeds/${d.id}/meta.json`,
+			JSON.stringify({ versionId: d.versionId, shapeSourceCounts: bundle.shapeSourceCounts }),
+		);
+		return { ...base, status: 'updated', shapeSourceCounts: bundle.shapeSourceCounts };
+	} catch (e) {
+		return {
+			...base,
+			status: 'error',
+			error: e instanceof Error ? e.message : String(e),
+		};
+	}
+}
+
+/** アクティブなフィードIDに属さない feeds/ 配下のキーを削除する */
+async function cleanupOrphans(bucket: BucketLike, activeIds: Set<string>): Promise<void> {
+	const orphans: string[] = [];
+	let cursor: string | undefined;
+	do {
+		const page = await bucket.list({ prefix: 'feeds/', cursor });
+		for (const obj of page.objects) {
+			const feedId = obj.key.split('/')[1];
+			if (feedId && !activeIds.has(feedId)) orphans.push(obj.key);
+		}
+		cursor = page.truncated ? page.cursor : undefined;
+	} while (cursor);
+	for (let i = 0; i < orphans.length; i += DELETE_BATCH) {
+		await bucket.delete(orphans.slice(i, i + DELETE_BATCH));
+	}
 }
