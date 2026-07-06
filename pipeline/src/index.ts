@@ -29,25 +29,14 @@ function toBucketLike(bucket: R2Bucket): BucketLike {
 	};
 }
 
-async function runScheduled(env: Env, ctx: ExecutionContext) {
-	await runPipeline({
-		bucket: toBucketLike(env.DATA_BUCKET),
-		fetcher: fetch,
-		sources: [createGtfsDataJpSource(env.GTFS_PREF_ID), createOdptSource()],
-	});
-}
-
 export default {
 	async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-		ctx.waitUntil(runScheduled(env, ctx));
-	},
-	// TODO: 本番データ投入後は削除する一時的なトリガー用ハンドラ
-	async fetch(req: Request, env: Env, ctx: ExecutionContext) {
-		const url = new URL(req.url);
-		if (url.pathname === '/__trigger' && req.method === 'POST') {
-			ctx.waitUntil(runScheduled(env, ctx));
-			return new Response('Pipeline triggered', { status: 200 });
-		}
-		return new Response('Not found', { status: 404 });
+		ctx.waitUntil(
+			runPipeline({
+				bucket: toBucketLike(env.DATA_BUCKET),
+				fetcher: fetch,
+				sources: [createGtfsDataJpSource(env.GTFS_PREF_ID), createOdptSource()],
+			}),
+		);
 	},
 } satisfies ExportedHandler<Env>;
