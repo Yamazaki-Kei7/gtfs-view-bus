@@ -1,4 +1,11 @@
-import { convertFeed, shapesToGeojson, stopRouteIds, stopsToGeojson, unzipFeed } from 'gtfs-core';
+import {
+	buildTimetableIndex,
+	convertFeed,
+	shapesToGeojson,
+	stopRouteIds,
+	stopsToGeojson,
+	unzipFeed,
+} from 'gtfs-core';
 import type { FeedDescriptor, FeedSource, SourceId } from './sources/types';
 
 /** R2Bucket と構造的に互換な最小インターフェース(テスト差し替え用) */
@@ -55,8 +62,9 @@ const DELETE_BATCH = 1000;
 /** 生成物(bundle.json / stops.geojson など)の出力スキーマ版。出力フォーマットを変えたら上げる。
  * versionId が同じ(=ソースのGTFSは無変更)でも meta のスキーマ版が古ければ再処理し、
  * 既存フィードを新フォーマットへ移行させる。version 2 で停留所に routeIds を付与した。
- * version 3 で shapes.txt の明らかな外れ値座標を除外する。 */
-const OUTPUT_SCHEMA_VERSION = 3;
+ * version 3 で shapes.txt の明らかな外れ値座標を除外する。
+ * version 4 で停留所別時刻表(timetable.json)を追加する。 */
+const OUTPUT_SCHEMA_VERSION = 4;
 
 export async function runPipeline({
 	bucket,
@@ -163,6 +171,10 @@ async function processFeed(
 			`feeds/${d.id}/stops.geojson`,
 			JSON.stringify(stopsToGeojson(files, stopRouteIds(files))),
 		);
+
+		// 停留所別の時刻表インデックス(バス停クリックで開く時刻表パネル用)。
+		// bundle.json を膨らませないため別ファイルにし、アプリは停留所クリック時に遅延ロードする。
+		await bucket.put(`feeds/${d.id}/timetable.json`, JSON.stringify(buildTimetableIndex(files)));
 
 		// meta.json は必ずこのフィードの最後の書き込みにすること: 更新完了のマーカーであり、
 		// 途中でクラッシュしても meta が残らず次回実行時に最初から再処理される(自己修復的な冪等性)。
