@@ -1,4 +1,10 @@
-import type { FeedBundle, LngLat, RouteInfo } from 'gtfs-core';
+import type {
+	CatalogFeed,
+	FeedBundle,
+	GeneratedFeatureCollection,
+	LineFeature,
+	RouteInfo,
+} from 'gtfs-core';
 
 export interface FeedIndexEntry {
 	id: string;
@@ -22,15 +28,9 @@ interface GeoJsonFeatureCollection {
 	features: object[];
 }
 
-export interface LoadedFeed {
-	id: string;
-	name: string;
-	bundle: FeedBundle;
-}
-
 export interface LoadedData {
 	index: FeedIndex;
-	feeds: LoadedFeed[];
+	feeds: CatalogFeed[];
 	stops: GeoJsonFeatureCollection;
 }
 
@@ -46,7 +46,7 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 export async function loadAll(): Promise<LoadedData> {
 	const index = await fetchJson<FeedIndex>('/data/feeds.json');
 	if (!index) throw new Error('feeds.json の取得に失敗しました');
-	const feeds: LoadedFeed[] = [];
+	const feeds: CatalogFeed[] = [];
 	const stops: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: [] };
 	await Promise.all(
 		index.feeds.map(async (f) => {
@@ -63,14 +63,11 @@ export async function loadAll(): Promise<LoadedData> {
 
 interface RouteLineFeature {
 	type: 'Feature';
-	geometry: { type: 'LineString'; coordinates: LngLat[] };
+	geometry: LineFeature['geometry'];
 	properties: { color: string };
 }
 
-export interface RouteLineCollection {
-	type: 'FeatureCollection';
-	features: RouteLineFeature[];
-}
+export type RouteLineCollection = GeneratedFeatureCollection<RouteLineFeature>;
 
 /**
  * 路線線(色分け)の GeoJSON をクライアントで生成する。
@@ -78,7 +75,7 @@ export interface RouteLineCollection {
  * trips 経由で route に結び付け、選択日に運行中(active)かつ非表示でない路線のみを描画する。
  */
 export function buildRouteLines(
-	feeds: LoadedFeed[],
+	feeds: CatalogFeed[],
 	catalog: RouteInfo[],
 	hidden: Record<string, boolean>,
 ): RouteLineCollection {

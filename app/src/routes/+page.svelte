@@ -14,7 +14,12 @@
 		Map as MaplibreMap,
 		StyleSpecification,
 	} from 'maplibre-gl';
-	import { busFeatureCollection, routeCatalog, type LngLat } from 'gtfs-core';
+	import {
+		busFeatureCollection,
+		routeCatalog,
+		type BusFeature,
+		type GeneratedFeatureCollection,
+	} from 'gtfs-core';
 	import Controls from '$lib/Controls.svelte';
 	import RouteLayers from '$lib/RouteLayers.svelte';
 	import { buildRouteLines, loadAll, type LoadedData, type RouteLineCollection } from '$lib/data';
@@ -87,15 +92,11 @@
 	// マウントさせるため、常設し空FCで初期化する({#if data}だと後付けでバスの上に乗る)
 	const EMPTY_STOPS: LoadedData['stops'] = { type: 'FeatureCollection', features: [] };
 
-	interface ColoredBusFeature {
-		type: 'Feature';
-		geometry: { type: 'Point'; coordinates: LngLat };
-		properties: { feedId: string; tripId: string; routeName: string; color: string };
+	// バス位置(gtfs-core の BusFeature)に所属路線の色を付与した Feature
+	interface ColoredBusFeature extends BusFeature {
+		properties: BusFeature['properties'] & { color: string };
 	}
-	interface ColoredBusCollection {
-		type: 'FeatureCollection';
-		features: ColoredBusFeature[];
-	}
+	type ColoredBusCollection = GeneratedFeatureCollection<ColoredBusFeature>;
 
 	// バス位置を計算し、非表示路線を除外して所属路線の色を付与する
 	const buses = $derived.by((): ColoredBusCollection => {
@@ -106,14 +107,8 @@
 			const routeKey = `${f.properties.feedId}|${f.properties.routeId}`;
 			if (hidden[routeKey]) continue;
 			features.push({
-				type: 'Feature',
-				geometry: f.geometry,
-				properties: {
-					feedId: f.properties.feedId,
-					tripId: f.properties.tripId,
-					routeName: f.properties.routeName,
-					color: colorByKey.get(routeKey) ?? '#e11d48',
-				},
+				...f,
+				properties: { ...f.properties, color: colorByKey.get(routeKey) ?? '#e11d48' },
 			});
 		}
 		return { type: 'FeatureCollection', features };
@@ -133,15 +128,16 @@
 		hidden = { ...hidden, [key]: !hidden[key] };
 	}
 
-	// 脈動アニメーション(波紋リング + 本体の呼吸)
+	// 脈動アニメーション(波紋リング + 本体の呼吸)。両レイヤは同じ基準半径から広がる
+	const BUS_RADIUS = 7;
 	const busPulsePaint: CircleLayerSpecification['paint'] = $derived({
-		'circle-radius': 7 + pulse * 13,
+		'circle-radius': BUS_RADIUS + pulse * 13,
 		'circle-color': ROUTE_COLOR_EXPR,
 		'circle-opacity': 0.4 * (1 - pulse),
 		'circle-stroke-width': 0,
 	});
 	const busCorePaint: CircleLayerSpecification['paint'] = $derived({
-		'circle-radius': 7 + Math.sin(pulse * Math.PI * 2) * 1.2,
+		'circle-radius': BUS_RADIUS + Math.sin(pulse * Math.PI * 2) * 1.2,
 		'circle-color': ROUTE_COLOR_EXPR,
 		'circle-stroke-width': 2,
 		'circle-stroke-color': '#ffffff',

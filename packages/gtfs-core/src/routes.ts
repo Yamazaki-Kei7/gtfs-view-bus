@@ -46,9 +46,10 @@ function makeKey(feedId: string, routeId: string): string {
 
 /** service の運行曜日(月0…日6)の和集合から運行区分ラベルを導出する(exceptions・期間は考慮しない) */
 function serviceLabel(days: boolean[]): string {
-	const weekday = days.slice(0, 5).every(Boolean);
+	const wd = days.slice(0, 5);
+	const weekday = wd.every(Boolean);
+	const noWeekday = wd.every((d) => !d);
 	const weekend = days[5] && days[6];
-	const noWeekday = days.slice(0, 5).every((d) => !d);
 	const noWeekend = !days[5] && !days[6];
 	if (weekday && weekend) return '毎日';
 	if (weekday && noWeekend) return '平日';
