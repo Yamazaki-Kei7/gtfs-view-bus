@@ -5,3 +5,4 @@ dist
 .claude
 pnpm-lock.yaml
 docs
+.playwright-mcp
