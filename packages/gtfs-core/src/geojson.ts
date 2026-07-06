@@ -18,6 +18,30 @@ export interface GeneratedFeatureCollection<F> {
 	features: F[];
 }
 
+/**
+ * 各停留所を通る route_id の集合を stop_times × trips から算出する。
+ * trips.txt(trip_id→route_id)と stop_times.txt(stop_id)を突き合わせ、
+ * 出現順を保った route_id 配列を stop_id ごとに返す。
+ */
+export function stopRouteIds(files: Record<string, string>): Record<string, string[]> {
+	const tripRoute = new Map<string, string>();
+	for (const t of parseCsv(files['trips.txt'] ?? '')) tripRoute.set(t.trip_id, t.route_id);
+	const byStop = new Map<string, Set<string>>();
+	for (const st of parseCsv(files['stop_times.txt'] ?? '')) {
+		const routeId = tripRoute.get(st.trip_id);
+		if (!routeId) continue;
+		let set = byStop.get(st.stop_id);
+		if (!set) {
+			set = new Set();
+			byStop.set(st.stop_id, set);
+		}
+		set.add(routeId);
+	}
+	const result: Record<string, string[]> = {};
+	for (const [stopId, set] of byStop) result[stopId] = [...set];
+	return result;
+}
+
 /** stops.txt からPointのFeatureCollectionを生成する(ソース提供のstops.geojsonが無いフィード用) */
 export function stopsToGeojson(
 	files: Record<string, string>,
