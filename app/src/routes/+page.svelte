@@ -11,20 +11,26 @@
 	import type {
 		CircleLayerSpecification,
 		ExpressionSpecification,
+		MapLayerMouseEvent,
 		Map as MaplibreMap,
 		StyleSpecification,
 	} from 'maplibre-gl';
 	import {
+		buildStopTimetable,
 		busFeatureCollection,
 		routeCatalog,
 		type BusFeature,
 		type GeneratedFeatureCollection,
+		type StopTimetable as StopTimetableData,
+		type TimetableIndex,
 	} from 'gtfs-core';
 	import Controls from '$lib/Controls.svelte';
 	import RouteLayers from '$lib/RouteLayers.svelte';
+	import StopTimetable from '$lib/StopTimetable.svelte';
 	import {
 		buildRouteLines,
 		loadAll,
+		loadTimetable,
 		type LoadedData,
 		type RouteLineCollection,
 		type StopFeature,
@@ -96,6 +102,15 @@
 	type Selection =
 		{ kind: 'bus'; key: string } | { kind: 'route'; key: string; lnglat: [number, number] };
 	let selected = $state<Selection | null>(null);
+	// バス停クリックで開く時刻表。バス/路線ポップアップとは独立した選択状態
+	let selectedStop = $state<{
+		feedId: string;
+		stopId: string;
+		name: string;
+		coord: [number, number];
+	} | null>(null);
+	// 遅延ロード済みのフィード別時刻表インデックス
+	let timetableByFeed = $state<Record<string, TimetableIndex>>({});
 	// 非表示にした路線(key = `${feedId}|${routeId}`)
 	let hidden = $state<Record<string, boolean>>({});
 	// バスの脈動アニメーションの位相(0〜1のこぎり波)
@@ -124,6 +139,65 @@
 		];
 		return `${m}/${d}(${w})`;
 	});
+
+	// 時刻表パネル(バス停クリック)の現在時刻ラベル(HH:MM)
+	const timeLabel = $derived(
+		`${String(Math.floor(sim.timeSec / 3600)).padStart(2, '0')}:${String(
+			Math.floor((sim.timeSec % 3600) / 60),
+		).padStart(2, '0')}`,
+	);
+
+	// 選択中バス停の時刻表(指定日にアクティブ・表示中の便のみ・路線ごとに方向分割)
+	const stopTimetable = $derived.by((): StopTimetableData | null => {
+		const sel = selectedStop;
+		if (!sel || !data) return null;
+		const idx = timetableByFeed[sel.feedId];
+		if (!idx) return null; // timetable.json ロード中
+		const feed = data.feeds.find((f) => f.id === sel.feedId);
+		if (!feed) return null;
+		return buildStopTimetable({
+			entries: idx.stops[sel.stopId] ?? [],
+			calendar: feed.bundle.calendar,
+			date: dateYMD,
+			nowSec: sim.timeSec,
+			routeInfo: (routeId) => routeByKey.get(`${sel.feedId}|${routeId}`),
+			isVisible: (routeId) => !hidden[`${sel.feedId}|${routeId}`],
+		});
+	});
+
+	// 選択中バス停のハイライトリング(地図)
+	const selectedStopFC = $derived({
+		type: 'FeatureCollection' as const,
+		features: selectedStop
+			? [
+					{
+						type: 'Feature' as const,
+						geometry: { type: 'Point' as const, coordinates: selectedStop.coord },
+						properties: {},
+					},
+				]
+			: [],
+	});
+
+	// バス停クリック: 時刻表を開き、そのフィードの時刻表インデックスを遅延ロードする
+	function handleStopClick(ev: MapLayerMouseEvent) {
+		// 上にバスが重なる場合はバスのポップアップを優先し、時刻表は開かない
+		if (ev.target.queryRenderedFeatures(ev.point, { layers: ['buses'] }).length > 0) return;
+		const f = ev.features?.[0];
+		if (!f || f.geometry.type !== 'Point' || !f.properties) return;
+		const feedId = String(f.properties.feedId);
+		selectedStop = {
+			feedId,
+			stopId: String(f.properties.stopId),
+			name: String(f.properties.name),
+			coord: [f.geometry.coordinates[0], f.geometry.coordinates[1]],
+		};
+		if (!timetableByFeed[feedId]) {
+			loadTimetable(feedId).then((idx) => {
+				timetableByFeed = { ...timetableByFeed, [feedId]: idx };
+			});
+		}
+	}
 
 	const EMPTY_LINES: RouteLineCollection = { type: 'FeatureCollection', features: [] };
 	const routeLines = $derived(data ? buildRouteLines(data.feeds, catalog) : EMPTY_LINES);
@@ -160,19 +234,19 @@
 	interface RenderStopFeature {
 		type: 'Feature';
 		geometry: StopFeature['geometry'];
-		properties: { stopId: string; name: string; active: boolean; color: string };
+		properties: { stopId: string; name: string; feedId: string; active: boolean; color: string };
 	}
 	const stopFC = $derived.by((): GeneratedFeatureCollection<RenderStopFeature> => {
 		if (!data) return { type: 'FeatureCollection', features: [] };
 		const features: RenderStopFeature[] = [];
 		for (const s of data.stops.features) {
-			const { stopId, name, routeKeys } = s.properties;
+			const { stopId, name, feedId, routeKeys } = s.properties;
 			if (routeKeys === undefined) {
 				// 旧データ: 路線関連付けが無い → 中立色で運行中表示(淡色化しない)
 				features.push({
 					type: 'Feature',
 					geometry: s.geometry,
-					properties: { stopId, name, active: true, color: STOP_NEUTRAL_COLOR },
+					properties: { stopId, name, feedId, active: true, color: STOP_NEUTRAL_COLOR },
 				});
 				continue;
 			}
@@ -189,14 +263,14 @@
 				features.push({
 					type: 'Feature',
 					geometry: s.geometry,
-					properties: { stopId, name, active: false, color: STOP_INACTIVE_COLOR },
+					properties: { stopId, name, feedId, active: false, color: STOP_INACTIVE_COLOR },
 				});
 			} else if (visibleColor !== null) {
 				// 運行中かつ表示中の路線が通る → 白抜き + その路線色のリング
 				features.push({
 					type: 'Feature',
 					geometry: s.geometry,
-					properties: { stopId, name, active: true, color: visibleColor },
+					properties: { stopId, name, feedId, active: true, color: visibleColor },
 				});
 			}
 			// hasActiveRoute かつ visibleColor===null(運行路線が全て非表示)→ 描画しない
@@ -337,9 +411,11 @@
 				layout={{ 'line-cap': 'round', 'line-join': 'round' }}
 				paint={{ 'line-color': '#000000', 'line-opacity': 0, 'line-width': 14 }}
 				onclick={(ev) => {
-					// 下にバスがあればバスのポップアップを優先し、路線ポップアップは出さない
-					const onBus = ev.target.queryRenderedFeatures(ev.point, { layers: ['buses'] });
-					if (onBus.length > 0) return;
+					// バス・停留所が下にある場合はそちら(ポップアップ/時刻表)を優先し、路線ポップアップは出さない
+					const above = ev.target.queryRenderedFeatures(ev.point, {
+						layers: ['buses', 'stops-active', 'stops-inactive'],
+					});
+					if (above.length > 0) return;
 					const f = ev.features?.[0];
 					if (!f || !f.properties) return;
 					selected = {
@@ -356,6 +432,7 @@
 		<GeoJSONSource data={stopFC}>
 			<!-- 運休停留所(小さいグレー点。運行中の白抜き+リングと別シンボルで目立たせない) -->
 			<CircleLayer
+				id="stops-inactive"
 				minzoom={STOP_MIN_ZOOM}
 				filter={STOP_INACTIVE_FILTER}
 				paint={{
@@ -364,9 +441,13 @@
 					'circle-opacity': 0.55,
 					'circle-stroke-width': 0,
 				}}
+				onclick={handleStopClick}
+				onmouseenter={() => (cursor = 'pointer')}
+				onmouseleave={() => (cursor = '')}
 			/>
 			<!-- 運行中停留所(白抜き + 路線色リング。ラインの視認を妨げない) -->
 			<CircleLayer
+				id="stops-active"
 				minzoom={STOP_MIN_ZOOM}
 				filter={STOP_ACTIVE_FILTER}
 				paint={{
@@ -375,6 +456,21 @@
 					'circle-stroke-width': STOP_ACTIVE_STROKE,
 					'circle-stroke-color': ROUTE_COLOR_EXPR,
 					'circle-opacity': 0.95,
+				}}
+				onclick={handleStopClick}
+				onmouseenter={() => (cursor = 'pointer')}
+				onmouseleave={() => (cursor = '')}
+			/>
+		</GeoJSONSource>
+
+		<GeoJSONSource data={selectedStopFC}>
+			<!-- 選択中バス停のハイライトリング(バスの下・停留所の上) -->
+			<CircleLayer
+				paint={{
+					'circle-radius': 11,
+					'circle-color': 'rgba(226,88,31,0.15)',
+					'circle-stroke-width': 2.5,
+					'circle-stroke-color': '#e2581f',
 				}}
 			/>
 		</GeoJSONSource>
@@ -461,4 +557,13 @@
 		<RouteLayers routes={activeRoutes} bind:hidden {dateLabel} />
 	{/if}
 	<Controls busCount={buses.features.length} feedInfos={data?.index.feeds ?? []} />
+
+	<StopTimetable
+		open={!!selectedStop}
+		stopName={selectedStop?.name ?? ''}
+		{dateLabel}
+		{timeLabel}
+		timetable={stopTimetable}
+		onClose={() => (selectedStop = null)}
+	/>
 </div>
