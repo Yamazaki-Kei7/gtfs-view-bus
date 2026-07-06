@@ -70,19 +70,34 @@ curl -fsS "http://localhost:8787/__scheduled?cron=0+20+L+*+*"
 #### 本番R2を一度だけ更新する
 
 本番WorkerのCronを待たずに、本番R2へデータを再生成する手順。
-`wrangler dev --remote` はCloudflare上の一時プレビュー環境でWorkerを実行し、R2バインディングは本番リソースへ接続される。
+`wrangler dev --remote` はCloudflare上の一時プレビュー環境でWorkerを実行するため、GTFS変換処理ではCPU制限に達することがある。
+そのため、一時的なWrangler設定でR2バインディングだけ `remote: true` にし、Worker本体はローカルで実行する。
 本番R2を書き換えるため、実行前に対象ブランチがデプロイ済みコードと一致していることを確認する。
 
 前提: リポジトリルートの `.env` に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` が入っていること。
 
 ```bash
-# ターミナル1: 本番R2バインディング付きのremote devを起動
+# ターミナル1: Workerはローカル実行、R2だけ本番接続にする一時configを作成して起動
 cd pipeline
+mkdir -p .tmp
+cat > .tmp/wrangler-remote-r2.jsonc <<EOF
+{
+  "name": "gtfs-view-bus-pipeline",
+  "main": "$(pwd)/src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "triggers": { "crons": ["0 20 L * *"] },
+  "r2_buckets": [
+    { "binding": "DATA_BUCKET", "bucket_name": "gtfs-view-bus-data", "remote": true }
+  ],
+  "vars": { "GTFS_PREF_ID": "10" }
+}
+EOF
+
 set -a
 source ../.env
 set +a
 WRANGLER_LOG_PATH=.tmp/wrangler-logs pnpm exec wrangler dev \
-  --remote \
+  --config .tmp/wrangler-remote-r2.jsonc \
   --test-scheduled \
   --port 8791 \
   --show-interactive-dev-session false \
