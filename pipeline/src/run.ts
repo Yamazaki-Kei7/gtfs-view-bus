@@ -1,4 +1,4 @@
-import { convertFeed, shapesToGeojson, stopsToGeojson, unzipFeed } from 'gtfs-core';
+import { convertFeed, shapesToGeojson, stopRouteIds, stopsToGeojson, unzipFeed } from 'gtfs-core';
 import type { FeedDescriptor, FeedSource, SourceId } from './sources/types';
 
 /** R2Bucket と構造的に互換な最小インターフェース(テスト差し替え用) */
@@ -142,15 +142,12 @@ async function processFeed(
 			routesText ?? JSON.stringify(shapesToGeojson(bundle)),
 		);
 
-		let stopsText: string | null = null;
-		if (d.stopsGeojsonUrl) {
-			const res = await fetcher(d.stopsGeojsonUrl);
-			if (!res.ok) throw new Error(`stops geojson fetch failed: ${res.status}`);
-			stopsText = await res.text();
-		}
+		// 停留所レイヤは常に stops.txt から生成し、各停留所に routeIds(通る路線)を付与する。
+		// これによりアプリ側で当日運行/運休の停留所を色分け・区別できる(ソース提供の
+		// stops.geojson は stops.txt 由来の派生物のため使わない)。
 		await bucket.put(
 			`feeds/${d.id}/stops.geojson`,
-			stopsText ?? JSON.stringify(stopsToGeojson(files)),
+			JSON.stringify(stopsToGeojson(files, stopRouteIds(files))),
 		);
 
 		// meta.json は必ずこのフィードの最後の書き込みにすること: 更新完了のマーカーであり、
