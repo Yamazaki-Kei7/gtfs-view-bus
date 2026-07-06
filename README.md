@@ -39,13 +39,85 @@ just dev
 
 just を使わない場合の生コマンドは `justfile` を参照。
 
+### Cronを手動実行する
+
+パイプラインWorkerは月次CronでR2へ `feeds.json` と `feeds/*` を生成する。
+WorkerをデプロイしてもCronは即時実行されないため、データソース追加後や初回投入時は手動実行が必要。
+
+#### ローカルR2を更新する
+
+ローカル開発用のR2(`../.wrangler/state`)へデータを投入する手順。
+
+```bash
+# ターミナル1: scheduledテストエンドポイント付きでパイプラインWorkerを起動
+just pipeline
+
+# ターミナル2: ローカルR2へデータを生成
+just seed
+```
+
+`just`を使わない場合:
+
+```bash
+# ターミナル1
+cd pipeline
+pnpm dev
+
+# ターミナル2
+curl -fsS "http://localhost:8787/__scheduled?cron=0+20+L+*+*"
+```
+
+#### 本番R2を一度だけ更新する
+
+本番WorkerのCronを待たずに、本番R2へデータを再生成する手順。
+`wrangler dev --remote` はCloudflare上の一時プレビュー環境でWorkerを実行し、R2バインディングは本番リソースへ接続される。
+本番R2を書き換えるため、実行前に対象ブランチがデプロイ済みコードと一致していることを確認する。
+
+前提: リポジトリルートの `.env` に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` が入っていること。
+
+```bash
+# ターミナル1: 本番R2バインディング付きのremote devを起動
+cd pipeline
+set -a
+source ../.env
+set +a
+WRANGLER_LOG_PATH=.tmp/wrangler-logs pnpm exec wrangler dev \
+  --remote \
+  --test-scheduled \
+  --port 8791 \
+  --show-interactive-dev-session false \
+  --log-level info
+```
+
+別ターミナルでCronを発火する:
+
+```bash
+curl -fsS "http://127.0.0.1:8791/__scheduled?cron=0+20+L+*+*"
+```
+
+実行後、本番R2の `feeds.json` を取得して `generatedAt` とフィード件数を確認する:
+
+```bash
+cd pipeline
+set -a
+source ../.env
+set +a
+WRANGLER_LOG_PATH=.tmp/wrangler-logs pnpm exec wrangler r2 object get \
+  gtfs-view-bus-data/feeds.json \
+  --remote \
+  --file .tmp/remote-feeds.json
+
+node -e 'const fs = require("fs"); const j = JSON.parse(fs.readFileSync(".tmp/remote-feeds.json", "utf8")); const counts = j.feeds.reduce((m, f) => { const k = f.source || "missing"; m[k] = (m[k] || 0) + 1; return m; }, {}); console.log(j.generatedAt); console.log(j.feeds.length); console.log(counts);'
+```
+
+アプリ側の `/data/*` は `cache-control: public, max-age=300` のため、R2更新後の画面反映には最大5分程度かかる。
+
 ## デプロイ
 
 1. `infra/` で R2 バケットを作成(infra/README.md 参照)
 2. GitHub Environment `production` に `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` を設定
 3. main へマージすると GitHub Actions がデプロイ
-4. 初回はデータが空なので、Cloudflare ダッシュボード → Workers → gtfs-view-bus-pipeline →
-   Settings → Trigger Events から Cron を手動実行してデータを投入する
+4. 初回はデータが空なので、上記「本番R2を一度だけ更新する」の手順でデータを投入する
 
 ## ライセンス・出典
 
