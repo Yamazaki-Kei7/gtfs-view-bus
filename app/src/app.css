@@ -1,1 +1,68 @@
 @import 'tailwindcss';
+
+/* ============================================================
+   MIERUNE デザインシステムのトークンを Tailwind v4 の @theme に統合。
+   これにより bg-mi-teal-600 / text-mi-ember-500 等のユーティリティが生成される。
+   値は claude.ai/design の tokens/colors.css・typography.css に準拠。
+   ============================================================ */
+@theme {
+	/* Brand: MIERUNE Teal(600 がブランド基準色) */
+	--color-mi-teal-50: #ecf6fa;
+	--color-mi-teal-100: #d2eaf1;
+	--color-mi-teal-200: #a6d4e3;
+	--color-mi-teal-300: #6fb6ce;
+	--color-mi-teal-400: #3a93b3;
+	--color-mi-teal-500: #1a7794;
+	--color-mi-teal-600: #005773;
+	--color-mi-teal-700: #024c63;
+	--color-mi-teal-800: #073c4e;
+	--color-mi-teal-900: #07303d;
+
+	/* Accent: Ember(ピン・ハイライト) */
+	--color-mi-ember-50: #fdf2ec;
+	--color-mi-ember-100: #fbe0d2;
+	--color-mi-ember-200: #f6c0a4;
+	--color-mi-ember-300: #f09b70;
+	--color-mi-ember-400: #ea7541;
+	--color-mi-ember-500: #e2581f;
+	--color-mi-ember-600: #c4470f;
+	--color-mi-ember-700: #9c390f;
+
+	/* Neutrals: cool slate */
+	--color-mi-slate-50: #f6f9fa;
+	--color-mi-slate-100: #eef3f5;
+	--color-mi-slate-200: #dee7ea;
+	--color-mi-slate-300: #c2d0d5;
+	--color-mi-slate-400: #95a7ae;
+	--color-mi-slate-500: #6e848d;
+	--color-mi-slate-600: #4f6670;
+	--color-mi-slate-700: #344a54;
+	--color-mi-slate-800: #21343c;
+	--color-mi-slate-900: #16242b;
+
+	/* フォント(app.html で Google Fonts を読み込む) */
+	--font-sans: 'Noto Sans JP', 'Montserrat', system-ui, sans-serif;
+	--font-display: 'Montserrat', 'Noto Sans JP', system-ui, sans-serif;
+	--font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+
+@layer base {
+	body {
+		font-family: var(--font-sans);
+		color: var(--color-mi-slate-900);
+		-webkit-font-smoothing: antialiased;
+	}
+}
+
+/* MapLibre のポップアップをデザインシステムに合わせて再スタイル(ポップアップ本体は
+   Svelte コンポーネント外の DOM に描画されるためグローバルに指定する) */
+.maplibregl-popup-content {
+	font-family: var(--font-sans);
+	padding: 10px 14px;
+	border-radius: 10px;
+	box-shadow: 0 4px 12px rgba(7, 48, 61, 0.18);
+	border: 1px solid var(--color-mi-slate-200);
+}
+.maplibregl-popup-tip {
+	border-top-color: #ffffff;
+}
