@@ -877,6 +877,40 @@ describe('runPipeline', () => {
 		expect(bucket.store.has('feeds/orphan~X~Y/bundle.json')).toBe(true);
 	});
 
+	it('旧形式feeds.json(sourceフィールド無し)のエントリもソース障害時に引き継ぐ', async () => {
+		const bucket = fakeBucket();
+		bucket.store.set(
+			'feeds.json',
+			JSON.stringify({
+				generatedAt: '2026-07-01T00:00:00Z',
+				feeds: [
+					{
+						id: 'testorg~testfeed~2026-04-01',
+						name: '旧形式フィード',
+						orgName: 'テスト協議会',
+						license: 'CC BY 4.0',
+						fromDate: '2026-04-01',
+						toDate: '2027-03-31',
+						status: 'updated',
+					},
+				],
+			}),
+		);
+		const failingSource: FeedSource = {
+			sourceId: 'gtfs-data.jp',
+			listFeeds: () => Promise.reject(new Error('down')),
+		};
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([]),
+			sources: [failingSource],
+		});
+		expect(statuses).toHaveLength(1);
+		expect(statuses[0].id).toBe('testorg~testfeed~2026-04-01');
+		// 引き継ぎ時に source を補完して正規化する
+		expect(statuses[0].source).toBe('gtfs-data.jp');
+	});
+
 	it('片側ソースの一覧失敗がもう片方の処理を妨げない', async () => {
 		const bucket = fakeBucket();
 		const failingSource: FeedSource = {
@@ -938,9 +972,12 @@ export interface FeedStatus {
 	shapeSourceCounts?: Record<string, number>;
 }
 
+/** 前回feeds.jsonのエントリ読み取り用の形。移行前の旧形式には source フィールドが無い */
+type PrevFeedStatus = Omit<FeedStatus, 'source'> & { source?: SourceId };
+
 interface FeedsIndex {
 	generatedAt: string;
-	feeds: FeedStatus[];
+	feeds?: PrevFeedStatus[];
 }
 
 interface FeedMeta {
@@ -968,11 +1005,14 @@ export async function runPipeline({
 			descriptors = await source.listFeeds(fetcher);
 		} catch (e) {
 			// 一覧取得に失敗したソースは前回のエントリをそのまま引き継ぐ(地図からの全消え防止)。
+			// 旧形式feeds.json(sourceフィールド無し)は gtfs-data.jp のエントリとして扱い、補完して正規化する。
 			// 引き継いだエントリの status は前回実行時の値のまま残る点に注意。
 			// この実行では掃除もスキップする(全フィードを孤児と誤認した全削除の防止)
 			console.error(`source list failed: ${source.sourceId}`, e);
 			anyListFailed = true;
-			statuses.push(...(prev?.feeds?.filter((f) => f.source === source.sourceId) ?? []));
+			const carried =
+				prev?.feeds?.filter((f) => (f.source ?? 'gtfs-data.jp') === source.sourceId) ?? [];
+			statuses.push(...carried.map((f) => ({ ...f, source: source.sourceId })));
 			continue;
 		}
 		for (const d of descriptors) {
@@ -1098,11 +1138,12 @@ async function cleanupOrphans(bucket: BucketLike, activeIds: Set<string>): Promi
 - listFeeds失敗時に `console.error` でログを残す
 - 前回feeds.json引き継ぎは `prev?.feeds?.filter(...)` でoptional chainingを強化
 - unchanged判定に `d.versionId !== ''` ガードを追加（版数解決失敗の記述子を誤ってunchanged扱いしないため）
+- 旧形式feeds.json（`source`フィールド無し）のエントリはソース障害時に gtfs-data.jp として引き継ぎ、`source` を補完して正規化する
 
 - [ ] **Step 4: テストが通ることを確認**
 
 Run: `pnpm --filter pipeline test`
-Expected: 全テストPASS（run 10件 + sources 7件）
+Expected: 全テストPASS（run 11件 + sources 7件）
 
 ※ この時点で `pipeline/src/index.ts` は旧 `runPipeline` シグネチャ（`prefId`）を参照しており型エラーになるが、次タスクで修正する。`vitest` はテスト対象のみコンパイルするためテストは通る。
 

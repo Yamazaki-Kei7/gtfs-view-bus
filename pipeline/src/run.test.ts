@@ -273,6 +273,40 @@ describe('runPipeline', () => {
 		expect(bucket.store.has('feeds/orphan~X~Y/bundle.json')).toBe(true);
 	});
 
+	it('旧形式feeds.json(sourceフィールド無し)のエントリもソース障害時に引き継ぐ', async () => {
+		const bucket = fakeBucket();
+		bucket.store.set(
+			'feeds.json',
+			JSON.stringify({
+				generatedAt: '2026-07-01T00:00:00Z',
+				feeds: [
+					{
+						id: 'testorg~testfeed~2026-04-01',
+						name: '旧形式フィード',
+						orgName: 'テスト協議会',
+						license: 'CC BY 4.0',
+						fromDate: '2026-04-01',
+						toDate: '2027-03-31',
+						status: 'updated',
+					},
+				],
+			}),
+		);
+		const failingSource: FeedSource = {
+			sourceId: 'gtfs-data.jp',
+			listFeeds: () => Promise.reject(new Error('down')),
+		};
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([]),
+			sources: [failingSource],
+		});
+		expect(statuses).toHaveLength(1);
+		expect(statuses[0].id).toBe('testorg~testfeed~2026-04-01');
+		// 引き継ぎ時に source を補完して正規化する
+		expect(statuses[0].source).toBe('gtfs-data.jp');
+	});
+
 	it('片側ソースの一覧失敗がもう片方の処理を妨げない', async () => {
 		const bucket = fakeBucket();
 		const failingSource: FeedSource = {

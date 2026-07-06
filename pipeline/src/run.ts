@@ -32,9 +32,12 @@ export interface FeedStatus {
 	shapeSourceCounts?: Record<string, number>;
 }
 
+/** 前回feeds.jsonのエントリ読み取り用の形。移行前の旧形式には source フィールドが無い */
+type PrevFeedStatus = Omit<FeedStatus, 'source'> & { source?: SourceId };
+
 interface FeedsIndex {
 	generatedAt: string;
-	feeds: FeedStatus[];
+	feeds?: PrevFeedStatus[];
 }
 
 interface FeedMeta {
@@ -62,11 +65,14 @@ export async function runPipeline({
 			descriptors = await source.listFeeds(fetcher);
 		} catch (e) {
 			// 一覧取得に失敗したソースは前回のエントリをそのまま引き継ぐ(地図からの全消え防止)。
+			// 旧形式feeds.json(sourceフィールド無し)は gtfs-data.jp のエントリとして扱い、補完して正規化する。
 			// 引き継いだエントリの status は前回実行時の値のまま残る点に注意。
 			// この実行では掃除もスキップする(全フィードを孤児と誤認した全削除の防止)
 			console.error(`source list failed: ${source.sourceId}`, e);
 			anyListFailed = true;
-			statuses.push(...(prev?.feeds?.filter((f) => f.source === source.sourceId) ?? []));
+			const carried =
+				prev?.feeds?.filter((f) => (f.source ?? 'gtfs-data.jp') === source.sourceId) ?? [];
+			statuses.push(...carried.map((f) => ({ ...f, source: source.sourceId })));
 			continue;
 		}
 		for (const d of descriptors) {
