@@ -28,7 +28,6 @@ describe('createOdptSource', () => {
 		expect(yosii?.versionId).toBe('/files-open/odpt/TakasakiCity/yosiibus-20260421.zip');
 		expect(yosii?.source).toBe('odpt');
 		expect(yosii?.license).toBe('CC BY 4.0');
-		expect(yosii?.stopsGeojsonUrl).toBeUndefined();
 		expect(yosii?.routesGeojsonUrl).toBeUndefined();
 	});
 

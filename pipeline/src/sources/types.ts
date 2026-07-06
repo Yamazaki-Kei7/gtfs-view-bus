@@ -16,8 +16,7 @@ export interface FeedDescriptor {
 	/** 差分検出キー。前回metaと一致すれば再処理をスキップする */
 	versionId: string;
 	fetchZip(fetcher: typeof fetch): Promise<Uint8Array>;
-	/** ソースがGeoJSONを別配布している場合のみ設定。無ければGTFSから生成する */
-	stopsGeojsonUrl?: string;
+	/** ソースがルート形状のGeoJSONを別配布している場合のみ設定。無ければGTFSのshapesから生成する */
 	routesGeojsonUrl?: string;
 }
 
