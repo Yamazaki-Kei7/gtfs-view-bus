@@ -58,12 +58,17 @@
 	let map = $state<MaplibreMap | undefined>();
 	let data = $state<LoadedData | null>(null);
 	let loadError = $state<string | null>(null);
-	// trip_id はフィード内でのみ一意なので、選択キーは feedId と組み合わせる
-	let selectedKey = $state<string | null>(null);
+	// バス/路線の選択(排他)。判別共用体の単一状態にして排他性を表現そのものに担わせる。
+	// bus の key は `${feedId}|${tripId}`(trip_id はフィード内でのみ一意)、route の key は `${feedId}|${routeId}`
+	type Selection =
+		{ kind: 'bus'; key: string } | { kind: 'route'; key: string; lnglat: [number, number] };
+	let selected = $state<Selection | null>(null);
 	// 非表示にした路線(key = `${feedId}|${routeId}`)
 	let hidden = $state<Record<string, boolean>>({});
 	// バスの脈動アニメーションの位相(0〜1のこぎり波)
 	let pulse = $state(0);
+	// 地図カーソル(クリック可能なフィーチャ上で pointer にする)
+	let cursor = $state('');
 
 	$effect(() => {
 		loadAll()
@@ -75,7 +80,8 @@
 
 	const catalog = $derived(data ? routeCatalog(data.feeds, dateYMD) : []);
 	const activeRoutes = $derived(catalog.filter((r) => r.active));
-	const colorByKey = $derived(new Map(catalog.map((r) => [r.key, r.color])));
+	// key → RouteInfo(バスの色付け・路線ポップアップの表示内容をカタログから引く)
+	const routeByKey = $derived(new Map(catalog.map((r) => [r.key, r])));
 
 	// 地図パネルのヘッダに出す日付ラベル(M/D(曜))
 	const dateLabel = $derived.by(() => {
@@ -87,7 +93,12 @@
 	});
 
 	const EMPTY_LINES: RouteLineCollection = { type: 'FeatureCollection', features: [] };
-	const routeLines = $derived(data ? buildRouteLines(data.feeds, catalog, hidden) : EMPTY_LINES);
+	const routeLines = $derived(data ? buildRouteLines(data.feeds, catalog) : EMPTY_LINES);
+	// 非表示路線はレイヤ filter で除外する(トグルのたびに全ジオメトリを再構築・再転送しない)
+	const routeLineFilter = $derived<ExpressionSpecification>([
+		'!',
+		['in', ['get', 'key'], ['literal', Object.keys(hidden).filter((k) => hidden[k])]],
+	]);
 	// 停留所レイヤはデータ読込前でも宣言順どおりの重なり(路線ライン→バス停→バス)で
 	// マウントさせるため、常設し空FCで初期化する({#if data}だと後付けでバスの上に乗る)
 	const EMPTY_STOPS: LoadedData['stops'] = { type: 'FeatureCollection', features: [] };
@@ -108,25 +119,30 @@
 			if (hidden[routeKey]) continue;
 			features.push({
 				...f,
-				properties: { ...f.properties, color: colorByKey.get(routeKey) ?? '#e11d48' },
+				properties: { ...f.properties, color: routeByKey.get(routeKey)?.color ?? '#e11d48' },
 			});
 		}
 		return { type: 'FeatureCollection', features };
 	});
 
-	// ポップアップはクリック時のスナップショットではなく毎フレームの最新位置に追随させる
+	// バスのポップアップはクリック時のスナップショットではなく毎フレームの最新位置に追随させる
 	// (便が運行を終えたり日付が変わったら自動的に閉じる)
-	const selectedBus = $derived(
-		selectedKey
-			? (buses.features.find(
-					(f) => `${f.properties.feedId}|${f.properties.tripId}` === selectedKey,
-				) ?? null)
-			: null,
-	);
+	const selectedBus = $derived.by(() => {
+		const sel = selected;
+		if (!sel || sel.kind !== 'bus') return null;
+		return (
+			buses.features.find((f) => `${f.properties.feedId}|${f.properties.tripId}` === sel.key) ??
+			null
+		);
+	});
 
-	function toggleRoute(key: string) {
-		hidden = { ...hidden, [key]: !hidden[key] };
-	}
+	// 路線ポップアップの表示内容はカタログから引く(feature properties には key しか載せない)
+	const selectedRoute = $derived.by(() => {
+		const sel = selected;
+		if (!sel || sel.kind !== 'route') return null;
+		const info = routeByKey.get(sel.key);
+		return info ? { lnglat: sel.lnglat, info } : null;
+	});
 
 	// 脈動アニメーション(波紋リング + 本体の呼吸)。両レイヤは同じ基準半径から広がる
 	const BUS_RADIUS = 7;
@@ -196,6 +212,16 @@
 		center={[139.2, 36.35]}
 		zoom={10}
 		attributionControl={false}
+		{cursor}
+		onclick={(ev) => {
+			// フィーチャ外のクリックで選択解除。ポップアップ内蔵の closeOnClick は
+			// レイヤクリック後に発火して新しい選択まで消してしまうため無効化し、ここで自前判定する
+			const m = ev.target;
+			if (!m.getLayer('routes-hit') || !m.getLayer('buses')) return;
+			if (m.queryRenderedFeatures(ev.point, { layers: ['routes-hit', 'buses'] }).length === 0) {
+				selected = null;
+			}
+		}}
 	>
 		<NavigationControl showCompass={false} position="top-right" />
 		<GeolocateControl
@@ -208,9 +234,32 @@
 		/>
 
 		<GeoJSONSource data={routeLines}>
+			<!-- 表示用の路線ライン(地図が透けるよう細め・やや透明) -->
 			<LineLayer
+				filter={routeLineFilter}
 				layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-				paint={{ 'line-color': ROUTE_COLOR_EXPR, 'line-width': 3, 'line-opacity': 0.75 }}
+				paint={{ 'line-color': ROUTE_COLOR_EXPR, 'line-width': 2, 'line-opacity': 0.55 }}
+			/>
+			<!-- クリック判定用の透明な太いライン(細い線でも当てやすくする) -->
+			<LineLayer
+				id="routes-hit"
+				filter={routeLineFilter}
+				layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+				paint={{ 'line-color': '#000000', 'line-opacity': 0, 'line-width': 14 }}
+				onclick={(ev) => {
+					// 下にバスがあればバスのポップアップを優先し、路線ポップアップは出さない
+					const onBus = ev.target.queryRenderedFeatures(ev.point, { layers: ['buses'] });
+					if (onBus.length > 0) return;
+					const f = ev.features?.[0];
+					if (!f || !f.properties) return;
+					selected = {
+						kind: 'route',
+						key: String(f.properties.key),
+						lnglat: [ev.lngLat.lng, ev.lngLat.lat],
+					};
+				}}
+				onmouseenter={() => (cursor = 'pointer')}
+				onmouseleave={() => (cursor = '')}
 			/>
 		</GeoJSONSource>
 
@@ -229,21 +278,61 @@
 		<GeoJSONSource data={buses}>
 			<CircleLayer paint={busPulsePaint} />
 			<CircleLayer
+				id="buses"
 				paint={busCorePaint}
 				onclick={(ev) => {
 					const f = ev.features?.[0];
 					if (f && f.geometry.type === 'Point') {
-						selectedKey = `${String(f.properties.feedId)}|${String(f.properties.tripId)}`;
+						selected = {
+							kind: 'bus',
+							key: `${String(f.properties.feedId)}|${String(f.properties.tripId)}`,
+						};
 					}
 				}}
+				onmouseenter={() => (cursor = 'pointer')}
+				onmouseleave={() => (cursor = '')}
 			/>
 		</GeoJSONSource>
 
 		{#if selectedBus}
-			<Popup lnglat={selectedBus.geometry.coordinates} onclose={() => (selectedKey = null)}>
+			<!-- onclose は自分の種別が選択中のときだけ解除する(別フィーチャをクリックした直後に
+			     旧ポップアップの close が新しい選択を消してしまうのを防ぐ) -->
+			<Popup
+				lnglat={selectedBus.geometry.coordinates}
+				closeOnClick={false}
+				onclose={() => {
+					if (selected?.kind === 'bus') selected = null;
+				}}
+			>
 				<div class="text-sm">
 					<div class="font-bold text-mi-slate-900">{selectedBus.properties.routeName}</div>
 					<div class="text-mi-slate-600">便: {selectedBus.properties.tripId}</div>
+				</div>
+			</Popup>
+		{/if}
+
+		{#if selectedRoute}
+			<Popup
+				lnglat={selectedRoute.lnglat}
+				closeOnClick={false}
+				onclose={() => {
+					if (selected?.kind === 'route') selected = null;
+				}}
+			>
+				<div class="text-sm">
+					<div class="flex items-center gap-2 font-bold text-mi-slate-900">
+						<span
+							class="h-1 w-4 flex-none rounded-full"
+							style="background-color: {selectedRoute.info.color}"
+						></span>
+						<span>{selectedRoute.info.name}</span>
+					</div>
+					<div class="mt-0.5 text-mi-slate-600">
+						<!-- serviceLabel のフォールバック値「運行」はそのまま、それ以外は「◯◯運行」と表記 -->
+						{selectedRoute.info.feedName}・{selectedRoute.info.serviceLabel === '運行'
+							? '運行'
+							: `${selectedRoute.info.serviceLabel}運行`}
+					</div>
 				</div>
 			</Popup>
 		{/if}
@@ -265,7 +354,7 @@
 	{/if}
 
 	{#if data}
-		<RouteLayers routes={activeRoutes} {hidden} onToggle={toggleRoute} {dateLabel} />
+		<RouteLayers routes={activeRoutes} bind:hidden {dateLabel} />
 	{/if}
 	<Controls busCount={buses.features.length} feedInfos={data?.index.feeds ?? []} />
 </div>
