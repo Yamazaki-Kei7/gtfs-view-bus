@@ -22,7 +22,13 @@
 	} from 'gtfs-core';
 	import Controls from '$lib/Controls.svelte';
 	import RouteLayers from '$lib/RouteLayers.svelte';
-	import { buildRouteLines, loadAll, type LoadedData, type RouteLineCollection } from '$lib/data';
+	import {
+		buildRouteLines,
+		loadAll,
+		type LoadedData,
+		type RouteLineCollection,
+		type StopFeature,
+	} from '$lib/data';
 	import { MAX_TIME_SEC, sim } from '$lib/sim.svelte';
 
 	// OSMベースマップは初期スタイルに含める(RasterTileSource コンポーネント経由だと
@@ -41,19 +47,46 @@
 		layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
 	};
 
-	// 路線色・停留所半径はデータ駆動式で指定する。停留所は minzoom(下記)以上でのみ表示する
+	// 路線色はデータ駆動式で指定する
 	const ROUTE_COLOR_EXPR: ExpressionSpecification = ['get', 'color'];
 	// 停留所を表示する最小ズーム(これ未満では非表示にして俯瞰時の煩雑さを避ける)
 	const STOP_MIN_ZOOM = 12;
-	const STOP_RADIUS_EXPR: ExpressionSpecification = [
+	// 運行中停留所: 白抜き + 路線色リング(ラインの視認を妨げない)
+	const STOP_ACTIVE_RADIUS: ExpressionSpecification = [
 		'interpolate',
 		['linear'],
 		['zoom'],
 		12,
-		4,
+		3.5,
 		16,
-		8,
+		7,
 	];
+	const STOP_ACTIVE_STROKE: ExpressionSpecification = [
+		'interpolate',
+		['linear'],
+		['zoom'],
+		12,
+		1.5,
+		16,
+		2.5,
+	];
+	// 運休停留所: 小さいグレーの中実点(運行中と別シンボルにして目立たせない)
+	const STOP_INACTIVE_RADIUS: ExpressionSpecification = [
+		'interpolate',
+		['linear'],
+		['zoom'],
+		12,
+		2.5,
+		16,
+		4.5,
+	];
+	const STOP_INACTIVE_COLOR = '#aeb9bf';
+	// 旧データ(routeIds 無し)フォールバックのリング色
+	const STOP_NEUTRAL_COLOR = '#6e848d';
+	// レイヤ filter は真偽式。get('active') で運行/運休を分離する
+	const STOP_ACTIVE_FILTER: ExpressionSpecification = ['==', ['get', 'active'], true];
+	const STOP_INACTIVE_FILTER: ExpressionSpecification = ['==', ['get', 'active'], false];
+	const INACTIVE_ROUTE_FILTER: ExpressionSpecification = ['==', ['get', 'active'], false];
 
 	let map = $state<MaplibreMap | undefined>();
 	let data = $state<LoadedData | null>(null);
@@ -94,14 +127,12 @@
 
 	const EMPTY_LINES: RouteLineCollection = { type: 'FeatureCollection', features: [] };
 	const routeLines = $derived(data ? buildRouteLines(data.feeds, catalog) : EMPTY_LINES);
-	// 非表示路線はレイヤ filter で除外する(トグルのたびに全ジオメトリを再構築・再転送しない)
-	const routeLineFilter = $derived<ExpressionSpecification>([
-		'!',
-		['in', ['get', 'key'], ['literal', Object.keys(hidden).filter((k) => hidden[k])]],
+	// 表示する路線ライン = 当日運行(active) かつ 非表示でない
+	const activeRouteFilter = $derived<ExpressionSpecification>([
+		'all',
+		['==', ['get', 'active'], true],
+		['!', ['in', ['get', 'key'], ['literal', Object.keys(hidden).filter((k) => hidden[k])]]],
 	]);
-	// 停留所レイヤはデータ読込前でも宣言順どおりの重なり(路線ライン→バス停→バス)で
-	// マウントさせるため、常設し空FCで初期化する({#if data}だと後付けでバスの上に乗る)
-	const EMPTY_STOPS: LoadedData['stops'] = { type: 'FeatureCollection', features: [] };
 
 	// バス位置(gtfs-core の BusFeature)に所属路線の色を付与した Feature
 	interface ColoredBusFeature extends BusFeature {
@@ -121,6 +152,54 @@
 				...f,
 				properties: { ...f.properties, color: routeByKey.get(routeKey)?.color ?? '#e11d48' },
 			});
+		}
+		return { type: 'FeatureCollection', features };
+	});
+
+	// 描画用の停留所 Feature(active と色をカタログ・非表示状態から決める)
+	interface RenderStopFeature {
+		type: 'Feature';
+		geometry: StopFeature['geometry'];
+		properties: { stopId: string; name: string; active: boolean; color: string };
+	}
+	const stopFC = $derived.by((): GeneratedFeatureCollection<RenderStopFeature> => {
+		if (!data) return { type: 'FeatureCollection', features: [] };
+		const features: RenderStopFeature[] = [];
+		for (const s of data.stops.features) {
+			const { stopId, name, routeKeys } = s.properties;
+			if (routeKeys === undefined) {
+				// 旧データ: 路線関連付けが無い → 中立色で運行中表示(淡色化しない)
+				features.push({
+					type: 'Feature',
+					geometry: s.geometry,
+					properties: { stopId, name, active: true, color: STOP_NEUTRAL_COLOR },
+				});
+				continue;
+			}
+			let hasActiveRoute = false;
+			let visibleColor: string | null = null;
+			for (const k of routeKeys) {
+				const info = routeByKey.get(k);
+				if (!info?.active) continue;
+				hasActiveRoute = true;
+				if (!hidden[k] && visibleColor === null) visibleColor = info.color;
+			}
+			if (!hasActiveRoute) {
+				// 当日運行路線が1本も通らない → 運休停留所(グレー点)
+				features.push({
+					type: 'Feature',
+					geometry: s.geometry,
+					properties: { stopId, name, active: false, color: STOP_INACTIVE_COLOR },
+				});
+			} else if (visibleColor !== null) {
+				// 運行中かつ表示中の路線が通る → 白抜き + その路線色のリング
+				features.push({
+					type: 'Feature',
+					geometry: s.geometry,
+					properties: { stopId, name, active: true, color: visibleColor },
+				});
+			}
+			// hasActiveRoute かつ visibleColor===null(運行路線が全て非表示)→ 描画しない
 		}
 		return { type: 'FeatureCollection', features };
 	});
@@ -234,16 +313,27 @@
 		/>
 
 		<GeoJSONSource data={routeLines}>
-			<!-- 表示用の路線ライン(地図が透けるよう細め・やや透明) -->
+			<!-- 運休路線(最下層。細い破線グレーで運行中ラインの視認を妨げない) -->
 			<LineLayer
-				filter={routeLineFilter}
+				filter={INACTIVE_ROUTE_FILTER}
+				layout={{ 'line-cap': 'butt', 'line-join': 'round' }}
+				paint={{
+					'line-color': '#9aa8ae',
+					'line-width': 1.5,
+					'line-opacity': 0.5,
+					'line-dasharray': [2, 2.5],
+				}}
+			/>
+			<!-- 運行中の路線ライン(地図が透けるよう細め・やや透明) -->
+			<LineLayer
+				filter={activeRouteFilter}
 				layout={{ 'line-cap': 'round', 'line-join': 'round' }}
 				paint={{ 'line-color': ROUTE_COLOR_EXPR, 'line-width': 2, 'line-opacity': 0.55 }}
 			/>
-			<!-- クリック判定用の透明な太いライン(細い線でも当てやすくする) -->
+			<!-- クリック判定用の透明な太いライン(運行路線のみ) -->
 			<LineLayer
 				id="routes-hit"
-				filter={routeLineFilter}
+				filter={activeRouteFilter}
 				layout={{ 'line-cap': 'round', 'line-join': 'round' }}
 				paint={{ 'line-color': '#000000', 'line-opacity': 0, 'line-width': 14 }}
 				onclick={(ev) => {
@@ -263,14 +353,28 @@
 			/>
 		</GeoJSONSource>
 
-		<GeoJSONSource data={data ? data.stops : EMPTY_STOPS}>
+		<GeoJSONSource data={stopFC}>
+			<!-- 運休停留所(小さいグレー点。運行中の白抜き+リングと別シンボルで目立たせない) -->
 			<CircleLayer
 				minzoom={STOP_MIN_ZOOM}
+				filter={STOP_INACTIVE_FILTER}
 				paint={{
-					'circle-radius': STOP_RADIUS_EXPR,
-					'circle-color': '#6e848d',
-					'circle-stroke-width': 1.5,
-					'circle-stroke-color': '#ffffff',
+					'circle-radius': STOP_INACTIVE_RADIUS,
+					'circle-color': STOP_INACTIVE_COLOR,
+					'circle-opacity': 0.55,
+					'circle-stroke-width': 0,
+				}}
+			/>
+			<!-- 運行中停留所(白抜き + 路線色リング。ラインの視認を妨げない) -->
+			<CircleLayer
+				minzoom={STOP_MIN_ZOOM}
+				filter={STOP_ACTIVE_FILTER}
+				paint={{
+					'circle-radius': STOP_ACTIVE_RADIUS,
+					'circle-color': '#ffffff',
+					'circle-stroke-width': STOP_ACTIVE_STROKE,
+					'circle-stroke-color': ROUTE_COLOR_EXPR,
+					'circle-opacity': 0.95,
 				}}
 			/>
 		</GeoJSONSource>

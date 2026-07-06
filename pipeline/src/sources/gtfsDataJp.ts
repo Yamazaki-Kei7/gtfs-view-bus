@@ -41,7 +41,6 @@ export function createGtfsDataJpSource(prefId: string): FeedSource {
 				toDate: entry.file_to_date,
 				source: 'gtfs-data.jp',
 				versionId: entry.file_uid,
-				stopsGeojsonUrl: entry.file_stop_url ?? undefined,
 				routesGeojsonUrl: entry.file_route_url ?? undefined,
 				async fetchZip(f) {
 					const zipRes = await f(entry.file_url);

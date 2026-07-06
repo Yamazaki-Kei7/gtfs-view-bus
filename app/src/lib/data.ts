@@ -3,6 +3,8 @@ import type {
 	FeedBundle,
 	GeneratedFeatureCollection,
 	LineFeature,
+	LngLat,
+	PointFeature,
 	RouteInfo,
 } from 'gtfs-core';
 
@@ -23,15 +25,18 @@ export interface FeedIndex {
 	feeds: FeedIndexEntry[];
 }
 
-interface GeoJsonFeatureCollection {
-	type: 'FeatureCollection';
-	features: object[];
+/** アプリ描画用に整形した停留所。routeKeys は `${feedId}|${routeId}` の配列
+ *  (旧データ=routeIds 無しは undefined:分類不能フォールバックの印) */
+export interface StopFeature {
+	type: 'Feature';
+	geometry: { type: 'Point'; coordinates: LngLat };
+	properties: { stopId: string; name: string; feedId: string; routeKeys: string[] | undefined };
 }
 
 export interface LoadedData {
 	index: FeedIndex;
 	feeds: CatalogFeed[];
-	stops: GeoJsonFeatureCollection;
+	stops: GeneratedFeatureCollection<StopFeature>;
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {
@@ -46,37 +51,52 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 export async function loadAll(): Promise<LoadedData> {
 	const index = await fetchJson<FeedIndex>('/data/feeds.json');
 	if (!index) throw new Error('feeds.json の取得に失敗しました');
-	const stops: GeoJsonFeatureCollection = { type: 'FeatureCollection', features: [] };
+	const stops: StopFeature[] = [];
 	// Promise.all は入力順で結果を返すため、feeds.json の順序が保たれる(パネルの事業者並びを毎回同一にする)
 	const feeds = (
 		await Promise.all(
 			index.feeds.map(async (f) => {
 				const [bundle, s] = await Promise.all([
 					fetchJson<FeedBundle>(`/data/feeds/${f.id}/bundle.json`),
-					fetchJson<GeoJsonFeatureCollection>(`/data/feeds/${f.id}/stops.geojson`),
+					fetchJson<GeneratedFeatureCollection<PointFeature>>(`/data/feeds/${f.id}/stops.geojson`),
 				]);
-				if (s) stops.features.push(...s.features);
+				if (s) {
+					for (const feat of s.features) {
+						stops.push({
+							type: 'Feature',
+							geometry: feat.geometry,
+							properties: {
+								stopId: feat.properties.stop_id,
+								name: feat.properties.stop_name,
+								feedId: f.id,
+								// routeIds 無し(再生成前の旧データ)は undefined にして分類不能フォールバックへ
+								routeKeys: feat.properties.routeIds
+									? feat.properties.routeIds.map((rid) => `${f.id}|${rid}`)
+									: undefined,
+							},
+						});
+					}
+				}
 				return bundle ? { id: f.id, name: f.name, bundle } : null;
 			}),
 		)
 	).filter((f): f is CatalogFeed => f !== null);
-	return { index, feeds, stops };
+	return { index, feeds, stops: { type: 'FeatureCollection', features: stops } };
 }
 
 interface RouteLineFeature {
 	type: 'Feature';
 	geometry: LineFeature['geometry'];
-	/** color は描画用。key は `${feedId}|${routeId}` で、非表示フィルタとカタログ(RouteInfo)参照に使う */
-	properties: { color: string; key: string };
+	/** color/key は描画・参照用。active は当日運行フラグ(運休路線の描き分け用) */
+	properties: { color: string; key: string; active: boolean };
 }
 
 export type RouteLineCollection = GeneratedFeatureCollection<RouteLineFeature>;
 
 /**
  * 路線線(色分け)の GeoJSON をクライアントで生成する。
- * routes.geojson はソースごとにプロパティが不定なため使わず、bundle.shapes を
- * trips 経由で route に結び付け、選択日に運行中(active)の路線のみを描画する。
- * 非表示路線の除外はレイヤ側の filter で行う(トグルのたびに GeoJSON を再構築しない)。
+ * bundle.shapes を trips 経由で route に結び付け、当日運行(active)フラグを付けて全路線を出力する。
+ * 運行/運休の描き分けと非表示路線の除外はレイヤ側の filter で行う。
  */
 export function buildRouteLines(feeds: CatalogFeed[], catalog: RouteInfo[]): RouteLineCollection {
 	const byKey = new Map(catalog.map((r) => [r.key, r]));
@@ -92,11 +112,11 @@ export function buildRouteLines(feeds: CatalogFeed[], catalog: RouteInfo[]): Rou
 			const routeId = shapeRoute.get(shapeId);
 			if (!routeId) continue;
 			const info = byKey.get(`${id}|${routeId}`);
-			if (!info || !info.active) continue;
+			if (!info) continue;
 			features.push({
 				type: 'Feature',
 				geometry: { type: 'LineString', coordinates: shape.coords },
-				properties: { color: info.color, key: info.key },
+				properties: { color: info.color, key: info.key, active: info.active },
 			});
 		}
 	}

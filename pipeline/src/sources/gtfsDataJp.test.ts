@@ -40,7 +40,6 @@ describe('createGtfsDataJpSource', () => {
 		expect(d.versionId).toBe('uid-1');
 		expect(d.source).toBe('gtfs-data.jp');
 		expect(d.license).toBe('CC BY 4.0');
-		expect(d.stopsGeojsonUrl).toBe('https://example.com/stops.geojson');
 		expect(d.routesGeojsonUrl).toBe('https://example.com/routes.geojson');
 		expect(await d.fetchZip(fetcherFor([]))).toEqual(new Uint8Array([1, 2, 3]));
 	});
@@ -52,11 +51,10 @@ describe('createGtfsDataJpSource', () => {
 		);
 	});
 
-	it('stop/route URLがnullならundefinedになる', async () => {
+	it('route URLがnullならundefinedになる', async () => {
 		const feeds = await createGtfsDataJpSource('10').listFeeds(
 			fetcherFor([entry({ file_stop_url: null, file_route_url: null })]),
 		);
-		expect(feeds[0].stopsGeojsonUrl).toBeUndefined();
 		expect(feeds[0].routesGeojsonUrl).toBeUndefined();
 	});
 });

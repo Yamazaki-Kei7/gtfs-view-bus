@@ -110,6 +110,15 @@ describe('runPipeline', () => {
 		const id = 'testorg~testfeed~2026-04-01';
 		expect(bucket.store.has(`feeds/${id}/bundle.json`)).toBe(true);
 		expect(bucket.store.has(`feeds/${id}/stops.geojson`)).toBe(true);
+		// file_stop_url があってもソース geojson は使わず stops.txt から生成し、routeIds を付与する
+		const stops = JSON.parse(bucket.store.get(`feeds/${id}/stops.geojson`) ?? '{}') as {
+			features: { properties: { stop_id: string; routeIds: string[] } }[];
+		};
+		expect(stops.features).toHaveLength(3);
+		expect(stops.features.find((f) => f.properties.stop_id === 'A')?.properties.routeIds).toEqual([
+			'R1',
+			'R2',
+		]);
 		// ソース提供のroutes.geojsonはそのまま保存される
 		expect(bucket.store.get(`feeds/${id}/routes.geojson`)).toBe(FIXTURE_ROUTES_GEOJSON);
 		expect(bucket.store.has(`feeds/${id}/meta.json`)).toBe(true);
