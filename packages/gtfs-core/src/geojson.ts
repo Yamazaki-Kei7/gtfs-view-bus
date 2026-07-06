@@ -4,7 +4,8 @@ import type { FeedBundle, LngLat } from './types';
 export interface PointFeature {
 	type: 'Feature';
 	geometry: { type: 'Point'; coordinates: LngLat };
-	properties: { stop_id: string; stop_name: string };
+	/** routeIds は「この停留所を通る route_id」。旧データ(付与前)には無いため optional */
+	properties: { stop_id: string; stop_name: string; routeIds?: string[] };
 }
 
 export interface LineFeature {
@@ -42,9 +43,11 @@ export function stopRouteIds(files: Record<string, string>): Record<string, stri
 	return result;
 }
 
-/** stops.txt からPointのFeatureCollectionを生成する(ソース提供のstops.geojsonが無いフィード用) */
+/** stops.txt からPointのFeatureCollectionを生成する(ソース提供のstops.geojsonが無いフィード用)。
+ *  stopRoutes を渡すと各停留所に routeIds(通る route_id)を付与する。 */
 export function stopsToGeojson(
 	files: Record<string, string>,
+	stopRoutes?: Record<string, string[]>,
 ): GeneratedFeatureCollection<PointFeature> {
 	const features: PointFeature[] = [];
 	for (const row of parseCsv(files['stops.txt'] ?? '')) {
@@ -56,7 +59,11 @@ export function stopsToGeojson(
 		features.push({
 			type: 'Feature',
 			geometry: { type: 'Point', coordinates: [lon, lat] },
-			properties: { stop_id: row.stop_id, stop_name: row.stop_name },
+			properties: {
+				stop_id: row.stop_id,
+				stop_name: row.stop_name,
+				routeIds: stopRoutes?.[row.stop_id] ?? [],
+			},
 		});
 	}
 	return { type: 'FeatureCollection', features };

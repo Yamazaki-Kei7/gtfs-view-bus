@@ -11,8 +11,16 @@ describe('stopsToGeojson', () => {
 		expect(fc.features[0]).toEqual({
 			type: 'Feature',
 			geometry: { type: 'Point', coordinates: [139, 36] },
-			properties: { stop_id: 'A', stop_name: '駅前' },
+			properties: { stop_id: 'A', stop_name: '駅前', routeIds: [] },
 		});
+	});
+
+	it('stopRoutes を渡すと各停留所に routeIds を付与する', () => {
+		const fc = stopsToGeojson(FIXTURE_FILES, stopRouteIds(FIXTURE_FILES));
+		expect(fc.features.find((f) => f.properties.stop_id === 'A')?.properties.routeIds).toEqual([
+			'R1',
+			'R2',
+		]);
 	});
 
 	it('座標が数値でない行と空欄の行はスキップする', () => {
