@@ -147,9 +147,15 @@ describe('runPipeline', () => {
 	it('旧形式meta(fileUid)でもunchanged判定できる', async () => {
 		const bucket = fakeBucket();
 		const id = 'testorg~testfeed~2026-04-01';
+		// fileUid 読み取りの検証に集中するため schemaVersion は現行に揃える
+		// (schemaVersion が古い場合の再処理は別テストで検証)
 		bucket.store.set(
 			`feeds/${id}/meta.json`,
-			JSON.stringify({ fileUid: 'uid-1', shapeSourceCounts: { shapes: 3, route: 0, straight: 0 } }),
+			JSON.stringify({
+				fileUid: 'uid-1',
+				schemaVersion: 3,
+				shapeSourceCounts: { shapes: 3, route: 0, straight: 0 },
+			}),
 		);
 		const statuses = await runPipeline({
 			bucket,
@@ -158,6 +164,67 @@ describe('runPipeline', () => {
 		});
 		expect(statuses[0].status).toBe('unchanged');
 		expect(statuses[0].shapeSourceCounts).toEqual({ shapes: 3, route: 0, straight: 0 });
+	});
+
+	it('スキーマ版が古い(schemaVersion 無し)metaはversionId一致でも再処理する', async () => {
+		const bucket = fakeBucket();
+		const id = 'testorg~testfeed~2026-04-01';
+		// versionId は一致するが schemaVersion を持たない旧 meta(routeIds 付与前を模す)。
+		// stops.geojson は routeIds 無しのダミーを置き、再生成で上書きされることを確認する
+		bucket.store.set(
+			`feeds/${id}/meta.json`,
+			JSON.stringify({
+				versionId: 'uid-1',
+				shapeSourceCounts: { shapes: 3, route: 0, straight: 0 },
+			}),
+		);
+		bucket.store.set(
+			`feeds/${id}/stops.geojson`,
+			JSON.stringify({ type: 'FeatureCollection', features: [] }),
+		);
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([entry({})]),
+			sources: [createGtfsDataJpSource('10')],
+		});
+		// versionId 一致でも再処理され(updated)、停留所に routeIds が付与される
+		expect(statuses[0].status).toBe('updated');
+		const stops = JSON.parse(bucket.store.get(`feeds/${id}/stops.geojson`) ?? '{}') as {
+			features: { properties: { stop_id: string; routeIds: string[] } }[];
+		};
+		expect(stops.features.find((f) => f.properties.stop_id === 'A')?.properties.routeIds).toEqual([
+			'R1',
+			'R2',
+		]);
+		// 移行後の meta には schemaVersion が記録される
+		const meta = JSON.parse(bucket.store.get(`feeds/${id}/meta.json`) ?? '{}') as {
+			schemaVersion?: number;
+		};
+		expect(meta.schemaVersion).toBe(3);
+	});
+
+	it('schemaVersion 2 のmetaはversionId一致でも再処理する', async () => {
+		const bucket = fakeBucket();
+		const id = 'testorg~testfeed~2026-04-01';
+		bucket.store.set(
+			`feeds/${id}/meta.json`,
+			JSON.stringify({
+				versionId: 'uid-1',
+				schemaVersion: 2,
+				shapeSourceCounts: { shapes: 3, route: 0, straight: 0 },
+			}),
+		);
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([entry({})]),
+			sources: [createGtfsDataJpSource('10')],
+		});
+
+		expect(statuses[0].status).toBe('updated');
+		const meta = JSON.parse(bucket.store.get(`feeds/${id}/meta.json`) ?? '{}') as {
+			schemaVersion?: number;
+		};
+		expect(meta.schemaVersion).toBe(3);
 	});
 
 	it('1フィードの失敗が他フィードを巻き込まない', async () => {

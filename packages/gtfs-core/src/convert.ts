@@ -47,6 +47,67 @@ function roundShape(shape: ShapeData): ShapeData {
 	};
 }
 
+interface CoordinateBounds {
+	minLng: number;
+	maxLng: number;
+	minLat: number;
+	maxLat: number;
+}
+
+const SHAPE_BOUNDS_PADDING_RATIO = 0.1;
+const MIN_SHAPE_BOUNDS_PADDING_DEGREES = 0.1;
+
+function coordinateBounds(coords: Iterable<LngLat>): CoordinateBounds | null {
+	let bounds: CoordinateBounds | null = null;
+	for (const [lng, lat] of coords) {
+		if (!bounds) {
+			bounds = { minLng: lng, maxLng: lng, minLat: lat, maxLat: lat };
+			continue;
+		}
+		bounds.minLng = Math.min(bounds.minLng, lng);
+		bounds.maxLng = Math.max(bounds.maxLng, lng);
+		bounds.minLat = Math.min(bounds.minLat, lat);
+		bounds.maxLat = Math.max(bounds.maxLat, lat);
+	}
+	return bounds;
+}
+
+function padBounds(bounds: CoordinateBounds): CoordinateBounds {
+	const lngPad = Math.max(
+		(bounds.maxLng - bounds.minLng) * SHAPE_BOUNDS_PADDING_RATIO,
+		MIN_SHAPE_BOUNDS_PADDING_DEGREES,
+	);
+	const latPad = Math.max(
+		(bounds.maxLat - bounds.minLat) * SHAPE_BOUNDS_PADDING_RATIO,
+		MIN_SHAPE_BOUNDS_PADDING_DEGREES,
+	);
+	return {
+		minLng: bounds.minLng - lngPad,
+		maxLng: bounds.maxLng + lngPad,
+		minLat: bounds.minLat - latPad,
+		maxLat: bounds.maxLat + latPad,
+	};
+}
+
+function isValidLngLat(coord: LngLat): boolean {
+	const [lng, lat] = coord;
+	return (
+		Number.isFinite(lng) &&
+		Number.isFinite(lat) &&
+		lng >= -180 &&
+		lng <= 180 &&
+		lat >= -90 &&
+		lat <= 90
+	);
+}
+
+function isWithinBounds(coord: LngLat, bounds: CoordinateBounds): boolean {
+	const [lng, lat] = coord;
+	return (
+		lng >= bounds.minLng && lng <= bounds.maxLng && lat >= bounds.minLat && lat <= bounds.maxLat
+	);
+}
+
 /**
  * @param routeGeojson リポジトリ提供の routes.geojson テキスト。
  *   shapes.txt を持たない trip の形状源として使う(任意)
@@ -66,6 +127,8 @@ export function convertFeed(files: Record<string, string>, routeGeojson?: string
 		const lat = Number(s.stop_lat);
 		if (Number.isFinite(lng) && Number.isFinite(lat)) stopCoord.set(s.stop_id, [lng, lat]);
 	}
+	const stopCoordBounds = coordinateBounds(stopCoord.values());
+	const shapeCoordBounds = stopCoordBounds ? padBounds(stopCoordBounds) : null;
 
 	const routes: Record<string, RouteData> = {};
 	for (const r of routeRows) {
@@ -78,15 +141,21 @@ export function convertFeed(files: Record<string, string>, routeGeojson?: string
 
 	const shapePoints = new Map<string, { seq: number; coord: LngLat }[]>();
 	for (const row of shapeRows) {
+		const seq = Number(row.shape_pt_sequence);
+		const coord: LngLat = [Number(row.shape_pt_lon), Number(row.shape_pt_lat)];
+		if (
+			!Number.isFinite(seq) ||
+			!isValidLngLat(coord) ||
+			(shapeCoordBounds && !isWithinBounds(coord, shapeCoordBounds))
+		) {
+			continue;
+		}
 		let arr = shapePoints.get(row.shape_id);
 		if (!arr) {
 			arr = [];
 			shapePoints.set(row.shape_id, arr);
 		}
-		arr.push({
-			seq: Number(row.shape_pt_sequence),
-			coord: [Number(row.shape_pt_lon), Number(row.shape_pt_lat)],
-		});
+		arr.push({ seq, coord });
 	}
 	const shapes: Record<string, ShapeData> = {};
 	for (const [id, pts] of shapePoints) {

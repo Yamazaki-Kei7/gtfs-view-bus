@@ -55,6 +55,26 @@ describe('convertFeed', () => {
 		}
 	});
 
+	it('停留所群から明らかに外れたshapes.txtの点を除外する', () => {
+		const files = {
+			...FIXTURE_FILES,
+			'shapes.txt': `shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence
+S1,36.0000,139.0000,1
+S1,0,0,2
+S1,36.0000,139.0100,3
+S1,36.0100,139.0100,4
+`,
+		};
+		const filtered = convertFeed(files, FIXTURE_ROUTES_GEOJSON);
+
+		expect(filtered.shapes.S1.coords).toEqual([
+			[139, 36],
+			[139.01, 36],
+			[139.01, 36.01],
+		]);
+		expect(filtered.shapes.S1.cumDist.at(-1)).toBeLessThan(3000);
+	});
+
 	it('calendar が変換される', () => {
 		expect(bundle.calendar.services.WD.days).toEqual([true, true, true, true, true, false, false]);
 		expect(bundle.calendar.exceptions['20260713'].WD).toBe(2);
