@@ -1,18 +1,40 @@
 import { strToU8, zipSync } from 'fflate';
 import { FIXTURE_FILES, FIXTURE_ROUTES_GEOJSON } from 'gtfs-core';
 import { describe, expect, it } from 'vitest';
-import { runPipeline, type BucketLike, type GtfsFileEntry } from './run';
+import { runPipeline, type BucketLike } from './run';
+import { createGtfsDataJpSource, type GtfsFileEntry } from './sources/gtfsDataJp';
+import type { FeedDescriptor, FeedSource } from './sources/types';
 
-function fakeBucket(): BucketLike & { store: Map<string, string> } {
+function fakeBucket(options?: {
+	/** listの1ページあたり件数。指定するとtruncated/cursorのページングを模す */
+	listPageSize?: number;
+}): BucketLike & { store: Map<string, string>; deleted: string[] } {
 	const store = new Map<string, string>();
+	const deleted: string[] = [];
 	return {
 		store,
+		deleted,
 		async get(key: string) {
 			const v = store.get(key);
 			return v === undefined ? null : { text: async () => v };
 		},
 		async put(key: string, value: string) {
 			store.set(key, value);
+		},
+		async list({ prefix, cursor }: { prefix: string; cursor?: string }) {
+			const keys = [...store.keys()].filter((k) => k.startsWith(prefix));
+			const start = cursor ? Number(cursor) : 0;
+			const size = options?.listPageSize ?? keys.length;
+			const truncated = start + size < keys.length;
+			return {
+				objects: keys.slice(start, start + size).map((key) => ({ key })),
+				truncated,
+				cursor: truncated ? String(start + size) : undefined,
+			};
+		},
+		async delete(keys: string[]) {
+			deleted.push(...keys);
+			for (const k of keys) store.delete(k);
 		},
 	};
 }
@@ -55,45 +77,78 @@ function fetcherFor(entries: GtfsFileEntry[]): typeof fetch {
 	return impl as typeof fetch;
 }
 
+/** GeoJSON別配布の無いODPT風フィードを模した記述子 */
+function odptDescriptor(): FeedDescriptor {
+	return {
+		id: 'odpt~TestOp~AllLines',
+		name: 'テスト事業者(全路線)',
+		orgName: 'テスト事業者',
+		license: 'CC BY 4.0',
+		fromDate: '',
+		toDate: '',
+		source: 'odpt',
+		versionId: '/files-open/odpt/TestOp/AllLines-20260601.zip',
+		fetchZip: async () => FIXTURE_ZIP,
+	};
+}
+
+function stubSource(descriptors: FeedDescriptor[]): FeedSource {
+	return { sourceId: 'odpt', listFeeds: async () => descriptors };
+}
+
 describe('runPipeline', () => {
 	it('新規フィードを変換してR2へ書き込み、feeds.jsonを更新する', async () => {
 		const bucket = fakeBucket();
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			prefId: '10',
+			sources: [createGtfsDataJpSource('10')],
 		});
 		expect(statuses).toHaveLength(1);
 		expect(statuses[0].status).toBe('updated');
+		expect(statuses[0].source).toBe('gtfs-data.jp');
 		const id = 'testorg~testfeed~2026-04-01';
 		expect(bucket.store.has(`feeds/${id}/bundle.json`)).toBe(true);
 		expect(bucket.store.has(`feeds/${id}/stops.geojson`)).toBe(true);
-		expect(bucket.store.has(`feeds/${id}/routes.geojson`)).toBe(true);
+		// ソース提供のroutes.geojsonはそのまま保存される
+		expect(bucket.store.get(`feeds/${id}/routes.geojson`)).toBe(FIXTURE_ROUTES_GEOJSON);
 		expect(bucket.store.has(`feeds/${id}/meta.json`)).toBe(true);
 		const index = JSON.parse(bucket.store.get('feeds.json') ?? '{}') as {
-			feeds: { id: string; status: string }[];
+			feeds: { id: string; status: string; source: string }[];
 		};
 		expect(index.feeds[0].id).toBe(id);
+		expect(index.feeds[0].source).toBe('gtfs-data.jp');
 		// フィクスチャ: T1=shapes.txt / T3=routes.geojsonマッチ / T2=直線フォールバック
 		expect(statuses[0].shapeSourceCounts).toEqual({ shapes: 1, route: 1, straight: 1 });
 	});
 
-	it('file_uid が同じなら unchanged でスキップし、shapeSourceCounts を引き継ぐ', async () => {
+	it('versionId が同じなら unchanged でスキップし、shapeSourceCounts を引き継ぐ', async () => {
 		const bucket = fakeBucket();
-		const deps = { bucket, fetcher: fetcherFor([entry({})]), prefId: '10' };
+		const deps = {
+			bucket,
+			fetcher: fetcherFor([entry({})]),
+			sources: [createGtfsDataJpSource('10')],
+		};
 		await runPipeline(deps);
 		const second = await runPipeline(deps);
 		expect(second[0].status).toBe('unchanged');
 		expect(second[0].shapeSourceCounts).toEqual({ shapes: 1, route: 1, straight: 1 });
 	});
 
-	it('フィード一覧の取得失敗時は feeds.json に触れず reject する', async () => {
+	it('旧形式meta(fileUid)でもunchanged判定できる', async () => {
 		const bucket = fakeBucket();
-		bucket.store.set('feeds.json', '{"old":true}');
-		const impl = async (): Promise<Response> => new Response('error', { status: 500 });
-		const failingFetcher = impl as typeof fetch;
-		await expect(runPipeline({ bucket, fetcher: failingFetcher, prefId: '10' })).rejects.toThrow();
-		expect(bucket.store.get('feeds.json')).toBe('{"old":true}');
+		const id = 'testorg~testfeed~2026-04-01';
+		bucket.store.set(
+			`feeds/${id}/meta.json`,
+			JSON.stringify({ fileUid: 'uid-1', shapeSourceCounts: { shapes: 3, route: 0, straight: 0 } }),
+		);
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([entry({})]),
+			sources: [createGtfsDataJpSource('10')],
+		});
+		expect(statuses[0].status).toBe('unchanged');
+		expect(statuses[0].shapeSourceCounts).toEqual({ shapes: 3, route: 0, straight: 0 });
 	});
 
 	it('1フィードの失敗が他フィードを巻き込まない', async () => {
@@ -105,9 +160,165 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([bad, entry({})]),
-			prefId: '10',
+			sources: [createGtfsDataJpSource('10')],
 		});
 		expect(statuses.find((s) => s.id.startsWith('badorg'))?.status).toBe('error');
 		expect(statuses.find((s) => s.id.startsWith('testorg'))?.status).toBe('updated');
+	});
+
+	it('GeoJSON未提供のフィードはGTFSからstops/routesを生成する', async () => {
+		const bucket = fakeBucket();
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([]),
+			sources: [stubSource([odptDescriptor()])],
+		});
+		expect(statuses[0].status).toBe('updated');
+		const stops = JSON.parse(
+			bucket.store.get('feeds/odpt~TestOp~AllLines/stops.geojson') ?? '{}',
+		) as { features: object[] };
+		expect(stops.features).toHaveLength(3);
+		const routes = JSON.parse(
+			bucket.store.get('feeds/odpt~TestOp~AllLines/routes.geojson') ?? '{}',
+		) as { features: object[] };
+		expect(routes.features.length).toBeGreaterThan(0);
+	});
+
+	it('どのソースにも属さない旧フィードのキーを削除する', async () => {
+		const bucket = fakeBucket();
+		bucket.store.set('feeds/testorg~testfeed~2025-01-01/bundle.json', '{}');
+		bucket.store.set('feeds/testorg~testfeed~2025-01-01/meta.json', '{}');
+		await runPipeline({
+			bucket,
+			fetcher: fetcherFor([entry({})]),
+			sources: [createGtfsDataJpSource('10')],
+		});
+		expect(bucket.store.has('feeds/testorg~testfeed~2025-01-01/bundle.json')).toBe(false);
+		expect(bucket.store.has('feeds/testorg~testfeed~2025-01-01/meta.json')).toBe(false);
+		expect(bucket.store.has('feeds/testorg~testfeed~2026-04-01/bundle.json')).toBe(true);
+	});
+
+	it('複数ページにまたがる孤児キーも全て削除する', async () => {
+		const bucket = fakeBucket({ listPageSize: 2 });
+		bucket.store.set('feeds/orphan~a~1/bundle.json', '{}');
+		bucket.store.set('feeds/orphan~a~1/meta.json', '{}');
+		bucket.store.set('feeds/orphan~b~2/bundle.json', '{}');
+		bucket.store.set('feeds/orphan~b~2/meta.json', '{}');
+		bucket.store.set('feeds/orphan~c~3/bundle.json', '{}');
+		await runPipeline({
+			bucket,
+			fetcher: fetcherFor([entry({})]),
+			sources: [createGtfsDataJpSource('10')],
+		});
+		// アクティブなフィードのキーは残り、孤児キーは全ページ分削除される
+		const remaining = [...bucket.store.keys()].filter((k) => k.startsWith('feeds/orphan'));
+		expect(remaining).toHaveLength(0);
+		expect(bucket.deleted).toHaveLength(5);
+		expect(bucket.store.has('feeds/testorg~testfeed~2026-04-01/bundle.json')).toBe(true);
+	});
+
+	it('エラーになったフィードの既存データは削除しない', async () => {
+		const bucket = fakeBucket();
+		const bad = entry({
+			organization_id: 'badorg',
+			file_url: 'https://example.com/missing.zip',
+		});
+		bucket.store.set('feeds/badorg~testfeed~2026-04-01/bundle.json', '{}');
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([bad]),
+			sources: [createGtfsDataJpSource('10')],
+		});
+		expect(statuses[0].status).toBe('error');
+		expect(bucket.store.has('feeds/badorg~testfeed~2026-04-01/bundle.json')).toBe(true);
+	});
+
+	it('ソース一覧の取得失敗時は前回エントリを引き継ぎ、掃除をスキップする', async () => {
+		const bucket = fakeBucket();
+		bucket.store.set(
+			'feeds.json',
+			JSON.stringify({
+				generatedAt: '2026-07-01T00:00:00Z',
+				feeds: [
+					{
+						id: 'odpt~A~B',
+						name: '前回フィード',
+						orgName: 'o',
+						license: 'CC BY 4.0',
+						fromDate: '',
+						toDate: '',
+						source: 'odpt',
+						status: 'updated',
+					},
+				],
+			}),
+		);
+		bucket.store.set('feeds/odpt~A~B/bundle.json', '{}');
+		// どのソースにも属さない孤児キー: 掃除が誤って実行されると消えてしまう監視対象
+		bucket.store.set('feeds/orphan~X~Y/bundle.json', '{}');
+		const failingSource: FeedSource = {
+			sourceId: 'odpt',
+			listFeeds: () => Promise.reject(new Error('down')),
+		};
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([]),
+			sources: [failingSource],
+		});
+		expect(statuses).toHaveLength(1);
+		expect(statuses[0].id).toBe('odpt~A~B');
+		expect(bucket.deleted).toHaveLength(0);
+		expect(bucket.store.has('feeds/odpt~A~B/bundle.json')).toBe(true);
+		// 一覧失敗時は掃除自体がスキップされるため孤児キーも残る
+		expect(bucket.store.has('feeds/orphan~X~Y/bundle.json')).toBe(true);
+	});
+
+	it('旧形式feeds.json(sourceフィールド無し)のエントリもソース障害時に引き継ぐ', async () => {
+		const bucket = fakeBucket();
+		bucket.store.set(
+			'feeds.json',
+			JSON.stringify({
+				generatedAt: '2026-07-01T00:00:00Z',
+				feeds: [
+					{
+						id: 'testorg~testfeed~2026-04-01',
+						name: '旧形式フィード',
+						orgName: 'テスト協議会',
+						license: 'CC BY 4.0',
+						fromDate: '2026-04-01',
+						toDate: '2027-03-31',
+						status: 'updated',
+					},
+				],
+			}),
+		);
+		const failingSource: FeedSource = {
+			sourceId: 'gtfs-data.jp',
+			listFeeds: () => Promise.reject(new Error('down')),
+		};
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([]),
+			sources: [failingSource],
+		});
+		expect(statuses).toHaveLength(1);
+		expect(statuses[0].id).toBe('testorg~testfeed~2026-04-01');
+		// 引き継ぎ時に source を補完して正規化する
+		expect(statuses[0].source).toBe('gtfs-data.jp');
+	});
+
+	it('片側ソースの一覧失敗がもう片方の処理を妨げない', async () => {
+		const bucket = fakeBucket();
+		const failingSource: FeedSource = {
+			sourceId: 'odpt',
+			listFeeds: () => Promise.reject(new Error('down')),
+		};
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([entry({})]),
+			sources: [createGtfsDataJpSource('10'), failingSource],
+		});
+		expect(statuses).toHaveLength(1);
+		expect(statuses[0].status).toBe('updated');
 	});
 });

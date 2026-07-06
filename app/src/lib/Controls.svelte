@@ -9,6 +9,17 @@
 			Math.floor((sim.timeSec % 3600) / 60),
 		).padStart(2, '0')}`,
 	);
+
+	const SOURCE_CREDITS: Record<string, string> = {
+		'gtfs-data.jp': 'GTFSデータリポジトリ(gtfs-data.jp)',
+		odpt: '公共交通オープンデータセンター(ODPT)',
+	};
+	// source未設定の旧feeds.jsonはgtfs-data.jp由来として扱う
+	const credits = $derived(
+		[...new Set(feedInfos.map((f) => f.source ?? 'gtfs-data.jp'))]
+			.map((s) => SOURCE_CREDITS[s] ?? s)
+			.join(' / '),
+	);
 </script>
 
 <div
@@ -44,6 +55,6 @@
 				? '・更新失敗'
 				: ''})
 		{/each}
-		— GTFSデータリポジトリ(gtfs-data.jp) / 地図: © OpenStreetMap contributors
+		— {credits} / 地図: © OpenStreetMap contributors
 	</div>
 </div>
