@@ -38,6 +38,9 @@ coverage/
 temp/
 .tmp/
 
+# Playwright MCP のスナップショット/スクリーンショット(検証用の一時成果物)
+.playwright-mcp/
+
 # Git worktrees
 .worktrees/
 
