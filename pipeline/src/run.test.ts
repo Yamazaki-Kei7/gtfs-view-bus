@@ -122,6 +122,13 @@ describe('runPipeline', () => {
 		// ソース提供のroutes.geojsonはそのまま保存される
 		expect(bucket.store.get(`feeds/${id}/routes.geojson`)).toBe(FIXTURE_ROUTES_GEOJSON);
 		expect(bucket.store.has(`feeds/${id}/meta.json`)).toBe(true);
+		// 停留所別時刻表を書き出す(停留所A: T1=08:00・T2=24:50・T3=09:00)
+		expect(bucket.store.has(`feeds/${id}/timetable.json`)).toBe(true);
+		const tt = JSON.parse(bucket.store.get(`feeds/${id}/timetable.json`) ?? '{}') as {
+			stops: Record<string, { r: string; t: number }[]>;
+		};
+		expect(tt.stops['A']).toHaveLength(3);
+		expect(tt.stops['A'].map((e) => e.t).sort((x, y) => x - y)).toEqual([28800, 32400, 89400]);
 		const index = JSON.parse(bucket.store.get('feeds.json') ?? '{}') as {
 			feeds: { id: string; status: string; source: string }[];
 		};
@@ -153,7 +160,7 @@ describe('runPipeline', () => {
 			`feeds/${id}/meta.json`,
 			JSON.stringify({
 				fileUid: 'uid-1',
-				schemaVersion: 3,
+				schemaVersion: 4,
 				shapeSourceCounts: { shapes: 3, route: 0, straight: 0 },
 			}),
 		);
@@ -200,7 +207,7 @@ describe('runPipeline', () => {
 		const meta = JSON.parse(bucket.store.get(`feeds/${id}/meta.json`) ?? '{}') as {
 			schemaVersion?: number;
 		};
-		expect(meta.schemaVersion).toBe(3);
+		expect(meta.schemaVersion).toBe(4);
 	});
 
 	it('schemaVersion 2 のmetaはversionId一致でも再処理する', async () => {
@@ -224,7 +231,32 @@ describe('runPipeline', () => {
 		const meta = JSON.parse(bucket.store.get(`feeds/${id}/meta.json`) ?? '{}') as {
 			schemaVersion?: number;
 		};
-		expect(meta.schemaVersion).toBe(3);
+		expect(meta.schemaVersion).toBe(4);
+	});
+
+	it('schemaVersion 3 のmetaはversionId一致でも再処理し timetable.json を生成する', async () => {
+		const bucket = fakeBucket();
+		const id = 'testorg~testfeed~2026-04-01';
+		// timetable.json 付与前(version 3)の meta を模す。versionId 一致でも再処理される。
+		bucket.store.set(
+			`feeds/${id}/meta.json`,
+			JSON.stringify({
+				versionId: 'uid-1',
+				schemaVersion: 3,
+				shapeSourceCounts: { shapes: 3, route: 0, straight: 0 },
+			}),
+		);
+		const statuses = await runPipeline({
+			bucket,
+			fetcher: fetcherFor([entry({})]),
+			sources: [createGtfsDataJpSource('10')],
+		});
+		expect(statuses[0].status).toBe('updated');
+		expect(bucket.store.has(`feeds/${id}/timetable.json`)).toBe(true);
+		const meta = JSON.parse(bucket.store.get(`feeds/${id}/meta.json`) ?? '{}') as {
+			schemaVersion?: number;
+		};
+		expect(meta.schemaVersion).toBe(4);
 	});
 
 	it('1フィードの失敗が他フィードを巻き込まない', async () => {

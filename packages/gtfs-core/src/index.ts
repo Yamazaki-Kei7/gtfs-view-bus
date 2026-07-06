@@ -12,3 +12,4 @@ export * from './convert';
 export * from './geojson';
 export * from './fixture';
 export * from './bus';
+export * from './timetable';

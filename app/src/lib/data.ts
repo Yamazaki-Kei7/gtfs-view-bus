@@ -6,6 +6,7 @@ import type {
 	LngLat,
 	PointFeature,
 	RouteInfo,
+	TimetableIndex,
 } from 'gtfs-core';
 
 export interface FeedIndexEntry {
@@ -121,4 +122,21 @@ export function buildRouteLines(feeds: CatalogFeed[], catalog: RouteInfo[]): Rou
 		}
 	}
 	return { type: 'FeatureCollection', features };
+}
+
+// 停留所別時刻表(timetable.json)はフィード単位で遅延ロードする。停留所を初めてクリックした
+// ときにそのフィード分だけ取得し、多重フェッチはモジュールレベルの Promise キャッシュで防ぐ。
+const timetableCache = new Map<string, Promise<TimetableIndex>>();
+const EMPTY_TIMETABLE: TimetableIndex = { stops: {} };
+
+/** 指定フィードの停留所別時刻表を取得する(取得失敗時は空インデックス=時刻表パネルは空状態)。 */
+export function loadTimetable(feedId: string): Promise<TimetableIndex> {
+	let p = timetableCache.get(feedId);
+	if (!p) {
+		p = fetchJson<TimetableIndex>(`/data/feeds/${feedId}/timetable.json`).then(
+			(idx) => idx ?? EMPTY_TIMETABLE,
+		);
+		timetableCache.set(feedId, p);
+	}
+	return p;
 }
