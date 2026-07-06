@@ -60,11 +60,13 @@ export async function runPipeline({
 		let descriptors: FeedDescriptor[];
 		try {
 			descriptors = await source.listFeeds(fetcher);
-		} catch {
+		} catch (e) {
 			// 一覧取得に失敗したソースは前回のエントリをそのまま引き継ぐ(地図からの全消え防止)。
+			// 引き継いだエントリの status は前回実行時の値のまま残る点に注意。
 			// この実行では掃除もスキップする(全フィードを孤児と誤認した全削除の防止)
+			console.error(`source list failed: ${source.sourceId}`, e);
 			anyListFailed = true;
-			statuses.push(...(prev?.feeds.filter((f) => f.source === source.sourceId) ?? []));
+			statuses.push(...(prev?.feeds?.filter((f) => f.source === source.sourceId) ?? []));
 			continue;
 		}
 		for (const d of descriptors) {
@@ -109,17 +111,21 @@ async function processFeed(
 	try {
 		const metaObj = await bucket.get(`feeds/${d.id}/meta.json`);
 		const meta = metaObj ? (JSON.parse(await metaObj.text()) as FeedMeta) : null;
-		if (meta && (meta.versionId ?? meta.fileUid) === d.versionId) {
+		// versionId '' は版数解決に失敗したエラー記述子(ODPT)なので unchanged 扱いにしない
+		if (meta && d.versionId !== '' && (meta.versionId ?? meta.fileUid) === d.versionId) {
 			return { ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts };
 		}
 
 		const zip = await d.fetchZip(fetcher);
 
-		// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する
+		// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する。
+		// ソースがURLを宣言しているのに取得できない場合は throw してフィード単位のエラーにする:
+		// 黙って生成フォールバックすると劣化データ(直線化bundle等)が新versionIdで固定されてしまう
 		let routesText: string | null = null;
 		if (d.routesGeojsonUrl) {
 			const res = await fetcher(d.routesGeojsonUrl);
-			if (res.ok) routesText = await res.text();
+			if (!res.ok) throw new Error(`routes geojson fetch failed: ${res.status}`);
+			routesText = await res.text();
 		}
 
 		const files = unzipFeed(zip);
@@ -133,7 +139,8 @@ async function processFeed(
 		let stopsText: string | null = null;
 		if (d.stopsGeojsonUrl) {
 			const res = await fetcher(d.stopsGeojsonUrl);
-			if (res.ok) stopsText = await res.text();
+			if (!res.ok) throw new Error(`stops geojson fetch failed: ${res.status}`);
+			stopsText = await res.text();
 		}
 		await bucket.put(
 			`feeds/${d.id}/stops.geojson`,

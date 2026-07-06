@@ -30,6 +30,8 @@ export function createGtfsDataJpSource(prefId: string): FeedSource {
 			const listRes = await fetcher(`${API_BASE}/files?pref=${prefId}`);
 			if (!listRes.ok) throw new Error(`feed list fetch failed: ${listRes.status}`);
 			const list = (await listRes.json()) as FilesResponse;
+			// HTTP 200でエラーボディが返るケースの診断性を上げる実行時ガード
+			if (!Array.isArray(list.body)) throw new Error('feed list response malformed');
 			return list.body.map((entry): FeedDescriptor => ({
 				id: `${entry.organization_id}~${entry.feed_id}~${entry.file_from_date}`,
 				name: entry.feed_name,

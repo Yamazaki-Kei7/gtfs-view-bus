@@ -5,7 +5,10 @@ import { runPipeline, type BucketLike } from './run';
 import { createGtfsDataJpSource, type GtfsFileEntry } from './sources/gtfsDataJp';
 import type { FeedDescriptor, FeedSource } from './sources/types';
 
-function fakeBucket(): BucketLike & { store: Map<string, string>; deleted: string[] } {
+function fakeBucket(options?: {
+	/** listの1ページあたり件数。指定するとtruncated/cursorのページングを模す */
+	listPageSize?: number;
+}): BucketLike & { store: Map<string, string>; deleted: string[] } {
 	const store = new Map<string, string>();
 	const deleted: string[] = [];
 	return {
@@ -18,10 +21,15 @@ function fakeBucket(): BucketLike & { store: Map<string, string>; deleted: strin
 		async put(key: string, value: string) {
 			store.set(key, value);
 		},
-		async list({ prefix }: { prefix: string; cursor?: string }) {
+		async list({ prefix, cursor }: { prefix: string; cursor?: string }) {
+			const keys = [...store.keys()].filter((k) => k.startsWith(prefix));
+			const start = cursor ? Number(cursor) : 0;
+			const size = options?.listPageSize ?? keys.length;
+			const truncated = start + size < keys.length;
 			return {
-				objects: [...store.keys()].filter((k) => k.startsWith(prefix)).map((key) => ({ key })),
-				truncated: false,
+				objects: keys.slice(start, start + size).map((key) => ({ key })),
+				truncated,
+				cursor: truncated ? String(start + size) : undefined,
 			};
 		},
 		async delete(keys: string[]) {
@@ -190,6 +198,25 @@ describe('runPipeline', () => {
 		expect(bucket.store.has('feeds/testorg~testfeed~2026-04-01/bundle.json')).toBe(true);
 	});
 
+	it('複数ページにまたがる孤児キーも全て削除する', async () => {
+		const bucket = fakeBucket({ listPageSize: 2 });
+		bucket.store.set('feeds/orphan~a~1/bundle.json', '{}');
+		bucket.store.set('feeds/orphan~a~1/meta.json', '{}');
+		bucket.store.set('feeds/orphan~b~2/bundle.json', '{}');
+		bucket.store.set('feeds/orphan~b~2/meta.json', '{}');
+		bucket.store.set('feeds/orphan~c~3/bundle.json', '{}');
+		await runPipeline({
+			bucket,
+			fetcher: fetcherFor([entry({})]),
+			sources: [createGtfsDataJpSource('10')],
+		});
+		// アクティブなフィードのキーは残り、孤児キーは全ページ分削除される
+		const remaining = [...bucket.store.keys()].filter((k) => k.startsWith('feeds/orphan'));
+		expect(remaining).toHaveLength(0);
+		expect(bucket.deleted).toHaveLength(5);
+		expect(bucket.store.has('feeds/testorg~testfeed~2026-04-01/bundle.json')).toBe(true);
+	});
+
 	it('エラーになったフィードの既存データは削除しない', async () => {
 		const bucket = fakeBucket();
 		const bad = entry({
@@ -227,6 +254,8 @@ describe('runPipeline', () => {
 			}),
 		);
 		bucket.store.set('feeds/odpt~A~B/bundle.json', '{}');
+		// どのソースにも属さない孤児キー: 掃除が誤って実行されると消えてしまう監視対象
+		bucket.store.set('feeds/orphan~X~Y/bundle.json', '{}');
 		const failingSource: FeedSource = {
 			sourceId: 'odpt',
 			listFeeds: () => Promise.reject(new Error('down')),
@@ -240,6 +269,8 @@ describe('runPipeline', () => {
 		expect(statuses[0].id).toBe('odpt~A~B');
 		expect(bucket.deleted).toHaveLength(0);
 		expect(bucket.store.has('feeds/odpt~A~B/bundle.json')).toBe(true);
+		// 一覧失敗時は掃除自体がスキップされるため孤児キーも残る
+		expect(bucket.store.has('feeds/orphan~X~Y/bundle.json')).toBe(true);
 	});
 
 	it('片側ソースの一覧失敗がもう片方の処理を妨げない', async () => {

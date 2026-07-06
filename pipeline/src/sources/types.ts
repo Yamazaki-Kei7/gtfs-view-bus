@@ -9,7 +9,7 @@ export interface FeedDescriptor {
 	name: string;
 	orgName: string;
 	license: string | null;
-	/** ODPTでは提供されないため空文字(アプリ未使用) */
+	/** fromDate/toDate はODPTでは提供されないため空文字(アプリ未使用) */
 	fromDate: string;
 	toDate: string;
 	source: SourceId;
