@@ -1,23 +1,10 @@
-import {
-	buildTimetableIndex,
-	convertFeed,
-	shapesToGeojson,
-	stopRouteIds,
-	stopsToGeojson,
-	unzipFeed,
-} from 'gtfs-core';
-import type { FeedSource, FeedTarget, SourceId } from './sources/types';
+import { processFeedTarget } from './feedProcessor';
+import type { FeedStatus } from './jobState';
+import type { BucketLike } from './storage';
+import { putJson } from './storage';
+import type { FeedSource, FeedTarget } from './sources/types';
 
-/** R2Bucket と構造的に互換な最小インターフェース(テスト差し替え用) */
-export interface BucketLike {
-	get(key: string): Promise<{ text(): Promise<string> } | null>;
-	put(key: string, value: string): Promise<void>;
-	list(options: {
-		prefix: string;
-		cursor?: string;
-	}): Promise<{ objects: { key: string }[]; truncated: boolean; cursor?: string }>;
-	delete(keys: string[]): Promise<void>;
-}
+export type { BucketLike } from './storage';
 
 export interface PipelineDeps {
 	bucket: BucketLike;
@@ -25,185 +12,31 @@ export interface PipelineDeps {
 	sources: FeedSource[];
 }
 
-export interface FeedStatus {
-	id: string;
-	name: string;
-	orgName: string;
-	license: string | null;
-	fromDate: string;
-	toDate: string;
-	source: SourceId;
-	status: 'updated' | 'unchanged' | 'error';
-	error?: string;
-	/** trip の形状ソース内訳(shapes / route / straight)。unchanged 時は meta.json から引き継ぐ */
-	shapeSourceCounts?: Record<string, number>;
-}
-
-/** 前回feeds.jsonのエントリ読み取り用の形。移行前の旧形式には source フィールドが無い */
-type PrevFeedStatus = Omit<FeedStatus, 'source'> & { source?: SourceId };
-
-interface FeedsIndex {
-	generatedAt: string;
-	feeds?: PrevFeedStatus[];
-}
-
-interface FeedMeta {
-	versionId?: string;
-	/** 旧形式のキー(fileUid時代)。読み取り時のみ解釈する */
-	fileUid?: string;
-	/** 生成物の出力スキーマ版。無い(旧meta)場合は 0 とみなす */
-	schemaVersion?: number;
-	shapeSourceCounts?: Record<string, number>;
-}
-
 /** R2の一括deleteは1回1000キーまで */
 const DELETE_BATCH = 1000;
-
-/** 生成物(bundle.json / stops.geojson など)の出力スキーマ版。出力フォーマットを変えたら上げる。
- * versionId が同じ(=ソースのGTFSは無変更)でも meta のスキーマ版が古ければ再処理し、
- * 既存フィードを新フォーマットへ移行させる。version 2 で停留所に routeIds を付与した。
- * version 3 で shapes.txt の明らかな外れ値座標を除外する。
- * version 4 で停留所別時刻表(timetable.json)を追加する。 */
-const OUTPUT_SCHEMA_VERSION = 4;
 
 export async function runPipeline({
 	bucket,
 	fetcher,
 	sources,
 }: PipelineDeps): Promise<FeedStatus[]> {
-	const prev = await readIndex(bucket);
-	const statuses: FeedStatus[] = [];
-	let anyListFailed = false;
-
+	const targets: FeedTarget[] = [];
 	for (const source of sources) {
-		let targets: FeedTarget[];
-		try {
-			targets = await source.listTargets(fetcher);
-		} catch (e) {
-			// 一覧取得に失敗したソースは前回のエントリをそのまま引き継ぐ(地図からの全消え防止)。
-			// 旧形式feeds.json(sourceフィールド無し)は gtfs-data.jp のエントリとして扱い、補完して正規化する。
-			// 引き継いだエントリの status は前回実行時の値のまま残る点に注意。
-			// この実行では掃除もスキップする(全フィードを孤児と誤認した全削除の防止)
-			console.error(`source list failed: ${source.sourceId}`, e);
-			anyListFailed = true;
-			const carried =
-				prev?.feeds?.filter((f) => (f.source ?? 'gtfs-data.jp') === source.sourceId) ?? [];
-			statuses.push(...carried.map((f) => ({ ...f, source: source.sourceId })));
-			continue;
-		}
-		for (const d of targets) {
-			statuses.push(await processFeed(bucket, fetcher, d));
-		}
+		targets.push(...(await source.listTargets(fetcher)));
 	}
 
-	await bucket.put(
-		'feeds.json',
-		JSON.stringify({ generatedAt: new Date().toISOString(), feeds: statuses }),
-	);
-	if (!anyListFailed) {
-		await cleanupOrphans(bucket, new Set(statuses.map((s) => s.id)));
+	const statuses: FeedStatus[] = [];
+	for (const target of targets) {
+		statuses.push(await processFeedTarget({ bucket, fetcher, target }));
 	}
+
+	await putJson(bucket, 'feeds.json', { generatedAt: new Date().toISOString(), feeds: statuses });
+	await cleanupOrphans(bucket, new Set(targets.map((target) => target.id)));
 	return statuses;
 }
 
-async function readIndex(bucket: BucketLike): Promise<FeedsIndex | null> {
-	const obj = await bucket.get('feeds.json');
-	if (!obj) return null;
-	try {
-		return JSON.parse(await obj.text()) as FeedsIndex;
-	} catch {
-		return null;
-	}
-}
-
-async function processFeed(
-	bucket: BucketLike,
-	fetcher: typeof fetch,
-	d: FeedTarget,
-): Promise<FeedStatus> {
-	const base = {
-		id: d.id,
-		name: d.name,
-		orgName: d.orgName,
-		license: d.license,
-		fromDate: d.fromDate,
-		toDate: d.toDate,
-		source: d.source,
-	};
-	try {
-		const metaObj = await bucket.get(`feeds/${d.id}/meta.json`);
-		const meta = metaObj ? (JSON.parse(await metaObj.text()) as FeedMeta) : null;
-		// versionId '' は版数解決に失敗したエラー記述子(ODPT)なので unchanged 扱いにしない。
-		// versionId が一致していても出力スキーマ版が古ければ再処理する(既存フィードの移行)
-		if (
-			meta &&
-			d.versionId !== '' &&
-			(meta.versionId ?? meta.fileUid) === d.versionId &&
-			(meta.schemaVersion ?? 0) >= OUTPUT_SCHEMA_VERSION
-		) {
-			return { ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts };
-		}
-
-		if (!d.zipUrl) {
-			throw new Error('zip url is missing');
-		}
-		const zipRes = await fetcher(d.zipUrl);
-		if (!zipRes.ok) throw new Error(`zip fetch failed: ${zipRes.status}`);
-		const zip = new Uint8Array(await zipRes.arrayBuffer());
-
-		// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する。
-		// ソースがURLを宣言しているのに取得できない場合は throw してフィード単位のエラーにする:
-		// 黙って生成フォールバックすると劣化データ(直線化bundle等)が新versionIdで固定されてしまう
-		let routesText: string | null = null;
-		if (d.routesGeojsonUrl) {
-			const res = await fetcher(d.routesGeojsonUrl);
-			if (!res.ok) throw new Error(`routes geojson fetch failed: ${res.status}`);
-			routesText = await res.text();
-		}
-
-		const files = unzipFeed(zip);
-		const bundle = convertFeed(files, routesText ?? undefined);
-		await bucket.put(`feeds/${d.id}/bundle.json`, JSON.stringify(bundle));
-		await bucket.put(
-			`feeds/${d.id}/routes.geojson`,
-			routesText ?? JSON.stringify(shapesToGeojson(bundle)),
-		);
-
-		// 停留所レイヤは常に stops.txt から生成し、各停留所に routeIds(通る路線)を付与する。
-		// これによりアプリ側で当日運行/運休の停留所を色分け・区別できる(ソース提供の
-		// stops.geojson は stops.txt 由来の派生物のため使わない)。
-		await bucket.put(
-			`feeds/${d.id}/stops.geojson`,
-			JSON.stringify(stopsToGeojson(files, stopRouteIds(files))),
-		);
-
-		// 停留所別の時刻表インデックス(バス停クリックで開く時刻表パネル用)。
-		// bundle.json を膨らませないため別ファイルにし、アプリは停留所クリック時に遅延ロードする。
-		await bucket.put(`feeds/${d.id}/timetable.json`, JSON.stringify(buildTimetableIndex(files)));
-
-		// meta.json は必ずこのフィードの最後の書き込みにすること: 更新完了のマーカーであり、
-		// 途中でクラッシュしても meta が残らず次回実行時に最初から再処理される(自己修復的な冪等性)。
-		// put の順序を入れ替えるとこの保証が静かに壊れる。
-		await bucket.put(
-			`feeds/${d.id}/meta.json`,
-			JSON.stringify({
-				versionId: d.versionId,
-				schemaVersion: OUTPUT_SCHEMA_VERSION,
-				shapeSourceCounts: bundle.shapeSourceCounts,
-			}),
-		);
-		return { ...base, status: 'updated', shapeSourceCounts: bundle.shapeSourceCounts };
-	} catch (e) {
-		return {
-			...base,
-			status: 'error',
-			error: e instanceof Error ? e.message : String(e),
-		};
-	}
-}
-
 /** アクティブなフィードIDに属さない feeds/ 配下のキーを削除する */
-async function cleanupOrphans(bucket: BucketLike, activeIds: Set<string>): Promise<void> {
+export async function cleanupOrphans(bucket: BucketLike, activeIds: Set<string>): Promise<void> {
 	const orphans: string[] = [];
 	let cursor: string | undefined;
 	do {
@@ -214,6 +47,7 @@ async function cleanupOrphans(bucket: BucketLike, activeIds: Set<string>): Promi
 		}
 		cursor = page.truncated ? page.cursor : undefined;
 	} while (cursor);
+
 	for (let i = 0; i < orphans.length; i += DELETE_BATCH) {
 		await bucket.delete(orphans.slice(i, i + DELETE_BATCH));
 	}

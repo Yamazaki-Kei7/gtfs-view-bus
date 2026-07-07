@@ -342,7 +342,7 @@ describe('runPipeline', () => {
 		expect(bucket.store.has('feeds/badorg~testfeed~2026-04-01/bundle.json')).toBe(true);
 	});
 
-	it('ソース一覧の取得失敗時は前回エントリを引き継ぎ、掃除をスキップする', async () => {
+	it('ソース一覧の取得失敗時は呼び出し側へthrowし、feeds.jsonを更新しない', async () => {
 		const bucket = fakeBucket();
 		bucket.store.set(
 			'feeds.json',
@@ -363,71 +363,20 @@ describe('runPipeline', () => {
 			}),
 		);
 		bucket.store.set('feeds/odpt~A~B/bundle.json', '{}');
-		// どのソースにも属さない孤児キー: 掃除が誤って実行されると消えてしまう監視対象
-		bucket.store.set('feeds/orphan~X~Y/bundle.json', '{}');
 		const failingSource: FeedSource = {
 			sourceId: 'odpt',
 			listTargets: () => Promise.reject(new Error('down')),
 		};
-		const statuses = await runPipeline({
-			bucket,
-			fetcher: fetcherFor([]),
-			sources: [failingSource],
-		});
-		expect(statuses).toHaveLength(1);
-		expect(statuses[0].id).toBe('odpt~A~B');
-		expect(bucket.deleted).toHaveLength(0);
-		expect(bucket.store.has('feeds/odpt~A~B/bundle.json')).toBe(true);
-		// 一覧失敗時は掃除自体がスキップされるため孤児キーも残る
-		expect(bucket.store.has('feeds/orphan~X~Y/bundle.json')).toBe(true);
-	});
-
-	it('旧形式feeds.json(sourceフィールド無し)のエントリもソース障害時に引き継ぐ', async () => {
-		const bucket = fakeBucket();
-		bucket.store.set(
-			'feeds.json',
-			JSON.stringify({
-				generatedAt: '2026-07-01T00:00:00Z',
-				feeds: [
-					{
-						id: 'testorg~testfeed~2026-04-01',
-						name: '旧形式フィード',
-						orgName: 'テスト協議会',
-						license: 'CC BY 4.0',
-						fromDate: '2026-04-01',
-						toDate: '2027-03-31',
-						status: 'updated',
-					},
-				],
+		await expect(
+			runPipeline({
+				bucket,
+				fetcher: fetcherFor([]),
+				sources: [failingSource],
 			}),
-		);
-		const failingSource: FeedSource = {
-			sourceId: 'gtfs-data.jp',
-			listTargets: () => Promise.reject(new Error('down')),
-		};
-		const statuses = await runPipeline({
-			bucket,
-			fetcher: fetcherFor([]),
-			sources: [failingSource],
-		});
-		expect(statuses).toHaveLength(1);
-		expect(statuses[0].id).toBe('testorg~testfeed~2026-04-01');
-		// 引き継ぎ時に source を補完して正規化する
-		expect(statuses[0].source).toBe('gtfs-data.jp');
-	});
-
-	it('片側ソースの一覧失敗がもう片方の処理を妨げない', async () => {
-		const bucket = fakeBucket();
-		const failingSource: FeedSource = {
-			sourceId: 'odpt',
-			listTargets: () => Promise.reject(new Error('down')),
-		};
-		const statuses = await runPipeline({
-			bucket,
-			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource({ prefIds: [10] }), failingSource],
-		});
-		expect(statuses).toHaveLength(1);
-		expect(statuses[0].status).toBe('updated');
+		).rejects.toThrow('down');
+		expect(bucket.deleted).toHaveLength(0);
+		const index = JSON.parse(bucket.store.get('feeds.json') ?? '{}') as { generatedAt?: string };
+		expect(index.generatedAt).toBe('2026-07-01T00:00:00Z');
+		expect(bucket.store.has('feeds/odpt~A~B/bundle.json')).toBe(true);
 	});
 });
