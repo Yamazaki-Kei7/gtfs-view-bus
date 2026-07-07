@@ -72,18 +72,18 @@
 		['linear'],
 		['zoom'],
 		12,
-		3.5,
+		2.5,
 		16,
-		7,
+		5,
 	];
 	const STOP_ACTIVE_STROKE: ExpressionSpecification = [
 		'interpolate',
 		['linear'],
 		['zoom'],
 		12,
-		1.5,
+		1.2,
 		16,
-		2.5,
+		2,
 	];
 	// 運休停留所: 小さいグレーの中実点(運行中と別シンボルにして目立たせない)
 	const STOP_INACTIVE_RADIUS: ExpressionSpecification = [
@@ -91,9 +91,9 @@
 		['linear'],
 		['zoom'],
 		12,
-		2.5,
+		2,
 		16,
-		4.5,
+		3.5,
 	];
 	const STOP_INACTIVE_COLOR = '#aeb9bf';
 	// 旧データ(routeIds 無し)フォールバックのリング色
@@ -441,7 +441,7 @@
 			<LineLayer
 				filter={activeRouteFilter}
 				layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-				paint={{ 'line-color': ROUTE_COLOR_EXPR, 'line-width': 3, 'line-opacity': 0.6 }}
+				paint={{ 'line-color': ROUTE_COLOR_EXPR, 'line-width': 2, 'line-opacity': 0.6 }}
 			/>
 			<!-- クリック判定用の透明な太いライン(運行路線のみ) -->
 			<LineLayer
