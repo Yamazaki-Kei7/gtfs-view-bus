@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import {
 		CircleLayer,
 		GeoJSONSource,
@@ -35,7 +36,7 @@
 		type RouteLineCollection,
 		type StopFeature,
 	} from '$lib/data';
-	import { MAX_TIME_SEC, sim } from '$lib/sim.svelte';
+	import { MAX_TIME_SEC, nowJst, sim } from '$lib/sim.svelte';
 
 	// OSMベースマップは初期スタイルに含める(RasterTileSource コンポーネント経由だと
 	// タイルが読み込まれない事象があるため、スタイルオブジェクトで確実に描画する)
@@ -117,6 +118,12 @@
 	let pulse = $state(0);
 	// 地図カーソル(クリック可能なフィーチャ上で pointer にする)
 	let cursor = $state('');
+
+	onMount(() => {
+		const n = nowJst();
+		sim.date = n.date;
+		sim.timeSec = n.timeSec;
+	});
 
 	$effect(() => {
 		loadAll()
@@ -357,7 +364,7 @@
 	});
 </script>
 
-<div class="relative h-screen w-screen">
+<div class="fixed inset-0 overflow-hidden">
 	<MapLibre
 		bind:map
 		class="h-full w-full"
