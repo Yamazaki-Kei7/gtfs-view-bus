@@ -1,0 +1,101 @@
+{
+	"generatedAt": "2026-07-07T00:00:00.000Z",
+	"feeds": [
+		{
+			"datasetId": "takasaki_city_yosiibus",
+			"resourceId": "takasaki_city_yosiibus_gtfs",
+			"operator": "TakasakiCity",
+			"feed": "yosiibus",
+			"name": "よしいバス",
+			"orgName": "高崎市",
+			"license": "CC BY 4.0",
+			"fromDate": "",
+			"toDate": "",
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip?date=current"
+		},
+		{
+			"datasetId": "gunma_bus_all_lines",
+			"resourceId": "gunma_bus_all_lines_gtfs",
+			"operator": "GunmaBus",
+			"feed": "AllLines",
+			"name": "群馬バス(全路線)",
+			"orgName": "群馬バス",
+			"license": "CC BY 4.0",
+			"fromDate": "",
+			"toDate": "",
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/GunmaBus/AllLines.zip?date=current"
+		},
+		{
+			"datasetId": "gunmachuo_bus_all_lines",
+			"resourceId": "gunmachuo_bus_all_lines_gtfs",
+			"operator": "GunmachuoBus",
+			"feed": "AllLines",
+			"name": "群馬中央バス(全路線)",
+			"orgName": "群馬中央バス",
+			"license": "CC BY 4.0",
+			"fromDate": "",
+			"toDate": "",
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/GunmachuoBus/AllLines.zip?date=current"
+		},
+		{
+			"datasetId": "joshin_kanko_bus_all_lines",
+			"resourceId": "joshin_kanko_bus_all_lines_gtfs",
+			"operator": "JoshinKankoBus",
+			"feed": "AllLines",
+			"name": "上信観光バス(全路線)",
+			"orgName": "上信観光バス",
+			"license": "CC BY 4.0",
+			"fromDate": "",
+			"toDate": "",
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/JoshinKankoBus/AllLines.zip?date=current"
+		},
+		{
+			"datasetId": "joshin_hire_all_lines",
+			"resourceId": "joshin_hire_all_lines_gtfs",
+			"operator": "JoshinHire",
+			"feed": "AllLines",
+			"name": "上信ハイヤー(全路線)",
+			"orgName": "上信ハイヤー",
+			"license": "CC BY 4.0",
+			"fromDate": "",
+			"toDate": "",
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/JoshinHire/AllLines.zip?date=current"
+		},
+		{
+			"datasetId": "kan_etsu_transportation_all_lines",
+			"resourceId": "kan_etsu_transportation_all_lines_gtfs",
+			"operator": "Kan_etsuTransportation",
+			"feed": "AllLines",
+			"name": "関越交通(全路線)",
+			"orgName": "関越交通",
+			"license": "CC BY 4.0",
+			"fromDate": "",
+			"toDate": "",
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/Kan_etsuTransportation/AllLines.zip?date=current"
+		},
+		{
+			"datasetId": "nippon_chuo_bus_maebashi_area",
+			"resourceId": "nippon_chuo_bus_maebashi_area_gtfs",
+			"operator": "NipponChuoBus",
+			"feed": "Maebashi_Area",
+			"name": "日本中央バス(前橋エリア)",
+			"orgName": "日本中央バス",
+			"license": "CC BY 4.0",
+			"fromDate": "",
+			"toDate": "",
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/NipponChuoBus/Maebashi_Area.zip?date=current"
+		},
+		{
+			"datasetId": "nagai_transportation_all_lines",
+			"resourceId": "nagai_transportation_all_lines_gtfs",
+			"operator": "NagaiTransportation",
+			"feed": "AllLines",
+			"name": "永井運輸(全路線)",
+			"orgName": "永井運輸",
+			"license": "CC BY 4.0",
+			"fromDate": "",
+			"toDate": "",
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/NagaiTransportation/AllLines.zip?date=current"
+		}
+	]
+}
