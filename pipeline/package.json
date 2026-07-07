@@ -7,7 +7,9 @@
 		"dev": "wrangler dev --test-scheduled --persist-to ../.wrangler/state",
 		"deploy": "wrangler deploy",
 		"test": "vitest run",
-		"check": "tsc --noEmit"
+		"check": "tsc --noEmit",
+		"cf:check": "wrangler check",
+		"cf:types": "wrangler types"
 	},
 	"dependencies": {
 		"gtfs-core": "workspace:*"
