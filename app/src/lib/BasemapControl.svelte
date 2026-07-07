@@ -2,8 +2,7 @@
 	import { CustomControl } from 'svelte-maplibre-gl';
 	import { BASEMAP_KEYS, BASEMAPS, type BasemapKey } from '$lib/basemaps';
 
-	let { active, onSelect }: { active: BasemapKey; onSelect: (key: BasemapKey) => void } =
-		$props();
+	let { active, onSelect }: { active: BasemapKey; onSelect: (key: BasemapKey) => void } = $props();
 </script>
 
 <CustomControl position="top-right" group={false}>
