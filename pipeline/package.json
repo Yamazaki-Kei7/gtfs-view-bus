@@ -8,7 +8,7 @@
 		"deploy": "wrangler deploy",
 		"test": "vitest run",
 		"check": "tsc --noEmit",
-		"cf:check": "wrangler check",
+		"cf:check": "WRANGLER_LOG_PATH=../.tmp/wrangler-logs wrangler deploy --dry-run",
 		"cf:types": "wrangler types"
 	},
 	"dependencies": {
