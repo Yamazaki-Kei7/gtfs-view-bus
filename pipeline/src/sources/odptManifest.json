@@ -1,21 +1,9 @@
 {
-	"generatedAt": "2026-07-07T20:38:08.804Z",
+	"generatedAt": "2026-07-07T20:45:12.924Z",
 	"feeds": [
 		{
-			"datasetId": "a_line_ferry_all_lines",
-			"resourceId": "b2893c97-9320-4bec-9526-43df29d428fc",
-			"operator": "ALineFerry",
-			"feed": "AllLines",
-			"name": "マルエーフェリー フェリー関連情報 / Ferry information of A-Line Ferry",
-			"orgName": "マルエーフェリー / A-Line Ferry",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/ALineFerry/AllLines.zip?date=20250801"
-		},
-		{
 			"datasetId": "akaiwa_city_all_lines",
-			"resourceId": "39739468-3403-40b9-b5fd-353e72ace741",
+			"resourceId": "c820f281-d86e-4370-8707-34d37230760f",
 			"operator": "AkaiwaCity",
 			"feed": "AllLines",
 			"name": "赤磐市広域路線バス・市民バス",
@@ -23,35 +11,11 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/AkaiwaCity/AllLines.zip?date=20240401"
-		},
-		{
-			"datasetId": "akiha_bus_service_all_lines",
-			"resourceId": "098c3ba7-7cdd-4ed6-b6d0-acb85bc595cc",
-			"operator": "AkihaBusService",
-			"feed": "AllLines",
-			"name": "秋葉バス / Akiha Bus Service",
-			"orgName": "秋葉バスサービス株式会社 / Akiha Bus...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/AkihaBusService/AllLines.zip?date=20260401"
-		},
-		{
-			"datasetId": "akita_city_akita_city_bus",
-			"resourceId": "6f7bf71c-5442-4df9-bced-a51f130da0f3",
-			"operator": "AkitaCity",
-			"feed": "AkitaCityBus",
-			"name": "秋田市 マイタウン・バス、中心市街地循環バスぐるる / Akita City（My-Town Bus・GURURU Bus）",
-			"orgName": "秋田市 / Akita City",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/AkitaCity/AkitaCityBus.zip?date=20260401"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/AkaiwaCity/AllLines.zip?date=20260401"
 		},
 		{
 			"datasetId": "aomori_city_all_lines",
-			"resourceId": "0082e4eb-2fb9-4413-bc8d-d1d49eda32f3",
+			"resourceId": "e2f89009-10e6-452a-b224-55c47dad7591",
 			"operator": "AomoriCity",
 			"feed": "AllLines",
 			"name": "青森市営バス路線情報 / Aomori City Bus information",
@@ -59,23 +23,11 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/AomoriCity/AllLines.zip?date=20250401"
-		},
-		{
-			"datasetId": "bingo_shosen_all_lines",
-			"resourceId": "1f963c20-89fb-4b30-9a4a-d853125ddbbd",
-			"operator": "BingoShosen",
-			"feed": "AllLines",
-			"name": "備後商船 フェリー関連情報 / Ferry information of Bingo Shosen",
-			"orgName": "備後商船 / Bingo Shosen",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/BingoShosen/AllLines.zip?date=20251007"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/AomoriCity/AllLines.zip?date=20260401"
 		},
 		{
 			"datasetId": "daishinto_radiantcity_yokohama",
-			"resourceId": "059a013e-58f5-417d-a3fc-a9996e1da740",
+			"resourceId": "e7fc12f8-80db-4519-9c59-1c33b0004e30",
 			"operator": "Daishinto",
 			"feed": "Radiantcity_Yokohama",
 			"name": "大新東株式会社 / Daishinto.Inc",
@@ -83,11 +35,11 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/Daishinto/Radiantcity_Yokohama.zip?date=20250527"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/Daishinto/Radiantcity_Yokohama.zip?date=20260301"
 		},
 		{
 			"datasetId": "gunma_bus_all_lines",
-			"resourceId": "0e443a47-b083-40ee-a41b-bd0839e93071",
+			"resourceId": "51afd365-2566-486e-90d1-acd8903253af",
 			"operator": "GunmaBus",
 			"feed": "AllLines",
 			"name": "株式会社群馬バス / Gunma Bus Co., Ltd.",
@@ -95,11 +47,11 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/GunmaBus/AllLines.zip?date=20240317"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/GunmaBus/AllLines.zip?date=20260601"
 		},
 		{
 			"datasetId": "gunmachuo_bus_all_lines",
-			"resourceId": "26fee245-9497-4c2c-8019-9f028917e838",
+			"resourceId": "d758d9fa-2a93-4c25-b308-6f0c1cf429fb",
 			"operator": "GunmachuoBus",
 			"feed": "AllLines",
 			"name": "群馬中央バス株式会社",
@@ -107,7 +59,7 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/GunmachuoBus/AllLines.zip?date=20231001"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/GunmachuoBus/AllLines.zip?date=20260430"
 		},
 		{
 			"datasetId": "hakodate_city_alllines",
@@ -120,18 +72,6 @@
 			"fromDate": "",
 			"toDate": "",
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/HakodateCity/Alllines.zip?date=20260615"
-		},
-		{
-			"datasetId": "hankyu_ferry_schedul_hankyu",
-			"resourceId": "96223965-11e6-4b52-9662-9413a0f32f52",
-			"operator": "HankyuFerry",
-			"feed": "schedul_hankyu",
-			"name": "阪九フェリー株式会社 / Hankyu Ferry",
-			"orgName": "阪九フェリー株式会社 / Hankyu Ferry...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/HankyuFerry/schedul_hankyu.zip?date=20260610"
 		},
 		{
 			"datasetId": "higashi_murayama_city_alllines",
@@ -170,32 +110,8 @@
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/HigashiyamatoCity/AllLines_CCBY4.zip?date=20260401"
 		},
 		{
-			"datasetId": "higashiyamato_city_all_lines_odpt",
-			"resourceId": "2f59651e-25e6-479a-bfd7-2d5c87c33901",
-			"operator": "HigashiyamatoCity",
-			"feed": "AllLines_ODPT",
-			"name": "東大和市コミュニティバス「ちょこバス」",
-			"orgName": "東大和市 / Higashiyamato City Hall",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/HigashiyamatoCity/AllLines_ODPT.zip?date=20250401"
-		},
-		{
-			"datasetId": "himeshima_vill_all_lines",
-			"resourceId": "2b721793-d12a-45e6-b1bd-a61ca8a03d74",
-			"operator": "HimeshimaVill",
-			"feed": "AllLines",
-			"name": "姫島村（大分県） フェリー関連情報 / Ferry information of Himeshima Village (Oita Pref.)",
-			"orgName": "姫島村（大分県） / Himeshima...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/HimeshimaVill/AllLines.zip?date=20250814"
-		},
-		{
 			"datasetId": "hitachi_automobile_transportation_all_lines",
-			"resourceId": "0d2ad057-5419-4485-9724-48567f768498",
+			"resourceId": "95ec7d40-73d9-4003-8d39-898421f5b689",
 			"operator": "HitachiAutomobileTransportation",
 			"feed": "AllLines",
 			"name": "文京区コミュニティバス「Bーぐる」 / Bunkyo City Community Bus ”B-guru”",
@@ -203,11 +119,11 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/HitachiAutomobileTransportation/AllLines.zip?date=20251105"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/HitachiAutomobileTransportation/AllLines.zip?date=20260401"
 		},
 		{
 			"datasetId": "hitachi_automobile_transportation_chiyoda_alllines",
-			"resourceId": "0dfb9750-ed72-4f5a-9368-76ad4a5adea9",
+			"resourceId": "45cab9b6-8e6a-405e-812d-20503c622326",
 			"operator": "HitachiAutomobileTransportation",
 			"feed": "Chiyoda_ALLLINES",
 			"name": "千代田区地域福祉交通「風ぐるま」 / Tokyo Chiyoda City Community Bus「KAZAGURUMA」",
@@ -215,11 +131,11 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/HitachiAutomobileTransportation/Chiyoda_ALLLINES.zip?date=20260401"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/HitachiAutomobileTransportation/Chiyoda_ALLLINES.zip?date=20260601"
 		},
 		{
 			"datasetId": "hitachi_automobile_transportation_kita_all_lines",
-			"resourceId": "0cced85d-1abd-47c9-bf95-dc58d4d432ed",
+			"resourceId": "b551e2d8-0ae1-4fb4-9a4d-aa8de7f3095c",
 			"operator": "HitachiAutomobileTransportation",
 			"feed": "KitaAllLines",
 			"name": "北区コミュニティバス「Kバス」 / Tokyo Kita City Community Bus \"K-bus\"",
@@ -227,31 +143,7 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/HitachiAutomobileTransportation/KitaAllLines.zip?date=20250401"
-		},
-		{
-			"datasetId": "hokkaido_takushoku_bus_takusyoku_highway_line",
-			"resourceId": "0c0c6deb-d0f1-4b29-a0d1-83693eebbaed",
-			"operator": "HokkaidoTakushokuBus",
-			"feed": "Takusyoku_highway_line",
-			"name": "拓殖バス 都市間高速バス・空港連絡バス（市内ホテル回り線） / Takusyoku Bus Highway Line",
-			"orgName": "北海道拓殖バス株式会社 / Hokkaido...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/HokkaidoTakushokuBus/Takusyoku_highway_line.zip?date=20260329"
-		},
-		{
-			"datasetId": "hokkaido_takushoku_bus_takusyoku_regular_line",
-			"resourceId": "130fe586-c786-4289-bb26-81d8053ab2d9",
-			"operator": "HokkaidoTakushokuBus",
-			"feed": "Takusyoku_regular_line",
-			"name": "拓殖バス 一般路線 / Takusyoku Bus Regular Line",
-			"orgName": "北海道拓殖バス株式会社 / Hokkaido...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/HokkaidoTakushokuBus/Takusyoku_regular_line.zip?date=20241210"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/HitachiAutomobileTransportation/KitaAllLines.zip?date=20251220"
 		},
 		{
 			"datasetId": "inagi_city_ibas_a_course",
@@ -264,30 +156,6 @@
 			"fromDate": "",
 			"toDate": "",
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/InagiCity/ibas_A_course.zip?date=20240219"
-		},
-		{
-			"datasetId": "itsukishima_kisen_all_lines",
-			"resourceId": "4c61a823-c0b9-4262-8226-9ddf6b77d886",
-			"operator": "ItsukishimaKisen",
-			"feed": "AllLines",
-			"name": "斎島汽船 フェリー関連情報 / Ferry information of Itsukishima Kisen",
-			"orgName": "斎島汽船 / Itsukishima Kisen",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/ItsukishimaKisen/AllLines.zip?date=20251001"
-		},
-		{
-			"datasetId": "izuhakone_bus_izhb",
-			"resourceId": "05e059aa-3773-4070-92a3-47917c25832e",
-			"operator": "IzuhakoneBus",
-			"feed": "IZHB",
-			"name": "伊豆箱根バス株式会社 / IZUHAKONE BUS CO.,LTD",
-			"orgName": "伊豆箱根バス株式会社 / IZUHAKONE BUS CO.,LTD",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/IzuhakoneBus/IZHB.zip?date=20250214"
 		},
 		{
 			"datasetId": "joshin_hire_all_lines",
@@ -303,7 +171,7 @@
 		},
 		{
 			"datasetId": "joshin_kanko_bus_all_lines",
-			"resourceId": "0e8d8d04-39fa-47ee-bf7c-fa037f3ae35d",
+			"resourceId": "83df87b8-bf94-4afe-b9c3-83cdc5e08316",
 			"operator": "JoshinKankoBus",
 			"feed": "AllLines",
 			"name": "株式会社上信観光バス 乗合事業課",
@@ -311,31 +179,7 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/JoshinKankoBus/AllLines.zip?date=20250401"
-		},
-		{
-			"datasetId": "juo_bus_isesaki_honjo_line",
-			"resourceId": "26b1e825-4a2c-41e4-97af-32a5e4f0e5b9",
-			"operator": "JuoBus",
-			"feed": "Isesaki_Honjo_Line",
-			"name": "十王自動車 / Juo Jidosha Corporation",
-			"orgName": "十王自動車株式会社 / Juo Jidousha...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/JuoBus/Isesaki_Honjo_Line.zip?date=20260618"
-		},
-		{
-			"datasetId": "kagoshima_city_maritime_bureau_all_lines",
-			"resourceId": "2cf53e9c-e2e3-40e4-bf6f-bef08b33fa4c",
-			"operator": "KagoshimaCityMaritimeBureau",
-			"feed": "AllLines",
-			"name": "桜島フェリー定期航路 / Sakurajima Ferry Regular Routes",
-			"orgName": "鹿児島市船舶局 / Kagoshima City...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/KagoshimaCityMaritimeBureau/AllLines.zip?date=20251010"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/JoshinKankoBus/AllLines.zip?date=20260101"
 		},
 		{
 			"datasetId": "kan_etsu_transportation_all_lines",
@@ -350,30 +194,6 @@
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/Kan_etsuTransportation/AllLines.zip?date=20260701"
 		},
 		{
-			"datasetId": "kanto_bus_all_lines",
-			"resourceId": "74f3f620-b3d4-423f-ae5d-8e664618c27d",
-			"operator": "KantoBus",
-			"feed": "AllLines",
-			"name": "関東バス株式会社",
-			"orgName": "関東バス株式会社 / Kanto-bus Corporation",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/KantoBus/AllLines.zip?date=20260701"
-		},
-		{
-			"datasetId": "kawasaki_tsurumi_rinko_bus_allrinko",
-			"resourceId": "0bb9cc5b-d18a-4cd0-8b74-390ca79b00a3",
-			"operator": "KawasakiTsurumiRinkoBus",
-			"feed": "allrinko",
-			"name": "川崎鶴見臨港バス株式会社",
-			"orgName": "川崎鶴見臨港バス株式会社 / KAWASAKI...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/KawasakiTsurumiRinkoBus/allrinko.zip?date=20240401"
-		},
-		{
 			"datasetId": "keifuku_bus_keifuku_rosen",
 			"resourceId": "1adfe429-fc7d-4e5f-bb24-013fdc3ca70d",
 			"operator": "KeifukuBus",
@@ -386,20 +206,8 @@
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/KeifukuBus/keifuku_rosen.zip?date=20260701"
 		},
 		{
-			"datasetId": "keio_bus_all_lines",
-			"resourceId": "642a138c-c3d9-405b-b681-6b99e13b81a9",
-			"operator": "KeioBus",
-			"feed": "AllLines",
-			"name": "京王バス / Keio Bus",
-			"orgName": "京王電鉄バス株式会社 / Keio Dentetsu...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/KeioBus/AllLines.zip?date=20260724"
-		},
-		{
 			"datasetId": "keisei_transit_bus_all_lines",
-			"resourceId": "34eaf2f1-873b-475a-a570-9b1595f18297",
+			"resourceId": "af855ba1-374e-4157-a80d-211a5c425d29",
 			"operator": "KeiseiTransitBus",
 			"feed": "AllLines",
 			"name": "京成バス千葉ウエスト / KEISEI BUS CHIBA WEST",
@@ -407,11 +215,11 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/KeiseiTransitBus/AllLines.zip?date=20250201"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/KeiseiTransitBus/AllLines.zip?date=20260401"
 		},
 		{
 			"datasetId": "kiyose_city_kiyo_bus",
-			"resourceId": "3788f6c1-0349-46d6-a77e-06aa711579c0",
+			"resourceId": "51906ad9-248c-433f-9f6b-5e4ae385dd3f",
 			"operator": "KiyoseCity",
 			"feed": "KiyoBus",
 			"name": "きよバス / Kiyo Bus",
@@ -419,7 +227,7 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/KiyoseCity/KiyoBus.zip?date=20240408"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/KiyoseCity/KiyoBus.zip?date=20260401"
 		},
 		{
 			"datasetId": "kokubunji_city_kokubunji_city_bunbus",
@@ -458,66 +266,6 @@
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/KunitachiCity/kunitachi_city_kunikko.zip?date=20260701"
 		},
 		{
-			"datasetId": "kyoto_bus_all_lines",
-			"resourceId": "0262eb49-8167-46e2-abca-c55e3c8f3d5a",
-			"operator": "KyotoBus",
-			"feed": "AllLines",
-			"name": "京都バス / Kyotobus",
-			"orgName": "京都バス株式会社 / KyotoBus Co., Ltd",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/KyotoBus/AllLines.zip?date=20260225"
-		},
-		{
-			"datasetId": "kyoto_bus_all_lines_anotherversion",
-			"resourceId": "068547bd-2f2b-4ec1-b5de-92d6923be77c",
-			"operator": "KyotoBus",
-			"feed": "AllLinesAnotherversion",
-			"name": "京都バス / Kyotobus",
-			"orgName": "京都バス株式会社 / KyotoBus Co., Ltd",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/KyotoBus/AllLinesAnotherversion.zip?date=20250915"
-		},
-		{
-			"datasetId": "kyoto_municipal_transportation_kyoto_city_bus_gtfs",
-			"resourceId": "12faf6c6-3341-4edd-90fe-3a0ebe956d05",
-			"operator": "KyotoMunicipalTransportation",
-			"feed": "Kyoto_City_Bus_GTFS",
-			"name": "京都市営バス / Kyoto City Bus",
-			"orgName": "京都市交通局 / Kyoto Municipal...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/KyotoMunicipalTransportation/Kyoto_City_Bus_GTFS.zip?date=20260630"
-		},
-		{
-			"datasetId": "kyoto_municipal_transportation_kyoto_city_subway_gtfs",
-			"resourceId": "e5ad5273-fd1f-4c80-b5c8-cdfcde2c4bd8",
-			"operator": "KyotoMunicipalTransportation",
-			"feed": "Kyoto_City_Subway_GTFS",
-			"name": "京都市営地下鉄 / Kyoto City Subway",
-			"orgName": "京都市交通局 / Kyoto Municipal...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/KyotoMunicipalTransportation/Kyoto_City_Subway_GTFS.zip?date=20260703"
-		},
-		{
-			"datasetId": "kyusho_ferry_all_lines",
-			"resourceId": "1b1b1e36-9a7e-41b0-9b03-4a3227487e57",
-			"operator": "KyushoFerry",
-			"feed": "AllLines",
-			"name": "九商フェリー フェリー関連情報 / Ferry information",
-			"orgName": "九商フェリー / Kyusho Ferry",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/KyushoFerry/AllLines.zip?date=20251005"
-		},
-		{
 			"datasetId": "machida_city_all_lines",
 			"resourceId": "90e6164c-d084-4147-ba0e-ee805b222945",
 			"operator": "MachidaCity",
@@ -528,42 +276,6 @@
 			"fromDate": "",
 			"toDate": "",
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/MachidaCity/AllLines.zip?date=20260316"
-		},
-		{
-			"datasetId": "marubun_kisen_all_lines",
-			"resourceId": "52e5a9c6-0206-4694-a349-842ebe56f8ff",
-			"operator": "MarubunKisen",
-			"feed": "AllLines",
-			"name": "丸文松島汽船 フェリー関連情報 / Ferry information of Marubun Matsushima Kisen",
-			"orgName": "丸文松島汽船 / Marubun Matsushima Kisen",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/MarubunKisen/AllLines.zip?date=20251005"
-		},
-		{
-			"datasetId": "matsue_city_traffic_office_all_lines",
-			"resourceId": "b3437083-3878-45a0-a9d8-7052e6f37ae2",
-			"operator": "MatsueCityTrafficOffice",
-			"feed": "AllLines",
-			"name": "松江市交通局 / Matsue City Traffic Office",
-			"orgName": "松江市交通局 / Matsue City Traffic Office",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/MatsueCityTrafficOffice/AllLines.zip?date=20260601"
-		},
-		{
-			"datasetId": "meimon_taiyo_ferry_all_lines",
-			"resourceId": "06c13832-ed1e-4b34-b519-4b9966dcd184",
-			"operator": "MeimonTaiyoFerry",
-			"feed": "AllLines",
-			"name": "株式会社名門大洋フェリー",
-			"orgName": "株式会社名門大洋フェリー / Meimon...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/MeimonTaiyoFerry/AllLines.zip?date=20240101"
 		},
 		{
 			"datasetId": "midori_city_all_lines",
@@ -579,7 +291,7 @@
 		},
 		{
 			"datasetId": "miyake_vill_all_line",
-			"resourceId": "a68bd7e4-c318-4ffc-ae29-33276f1d86f0",
+			"resourceId": "f526db08-21ea-452c-b6ed-ea5758b3c44a",
 			"operator": "MiyakeVill",
 			"feed": "AllLine",
 			"name": "三宅村営バス",
@@ -587,7 +299,7 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/MiyakeVill/AllLine.zip?date=20241108"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/MiyakeVill/AllLine.zip?date=20250929"
 		},
 		{
 			"datasetId": "mizuho_town_all_lines",
@@ -603,7 +315,7 @@
 		},
 		{
 			"datasetId": "nagai_transportation_all_lines",
-			"resourceId": "04809d15-f393-44ce-ad15-89612dc3bdb1",
+			"resourceId": "be0f5083-99ce-47c1-83c7-e15b6a6cfecb",
 			"operator": "NagaiTransportation",
 			"feed": "AllLines",
 			"name": "永井バス（永井運輸株式会社） / Nagai Transportation Co., Ltd.",
@@ -611,11 +323,11 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/NagaiTransportation/AllLines.zip?date=20221220"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/NagaiTransportation/AllLines.zip?date=20260401"
 		},
 		{
 			"datasetId": "nagai_transportation_tamarin",
-			"resourceId": "85520a4b-fad0-4c4d-b245-e58e052aa5b3",
+			"resourceId": "dbdd21b3-a529-4beb-9c2f-60f73ec89526",
 			"operator": "NagaiTransportation",
 			"feed": "Tamarin",
 			"name": "（2024年10月1日廃止）玉村町乗合タクシーたまりん / (Abolished on October 1, 2024)Tamarin (Tamamura Town)",
@@ -623,7 +335,7 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/NagaiTransportation/Tamarin.zip?date=20220401"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/NagaiTransportation/Tamarin.zip?date=20240401"
 		},
 		{
 			"datasetId": "nagoya_housing_city_planning_bureau_nagoya_srt_all_lines",
@@ -639,7 +351,7 @@
 		},
 		{
 			"datasetId": "nippon_chuo_bus_maebashi_area",
-			"resourceId": "143a64aa-ecae-4fca-a409-fb550622ca74",
+			"resourceId": "162f56b0-5f83-4ad3-a1ac-8f9e3c5b2f90",
 			"operator": "NipponChuoBus",
 			"feed": "Maebashi_Area",
 			"name": "日本中央バス 全線 (2025.9/30までは奥多野線を除く)",
@@ -647,7 +359,7 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/NipponChuoBus/Maebashi_Area.zip?date=20230804"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/NipponChuoBus/Maebashi_Area.zip?date=20260401"
 		},
 		{
 			"datasetId": "nippon_chuo_bus_okutano_area",
@@ -662,20 +374,8 @@
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/NipponChuoBus/Okutano_Area.zip?date=20231101"
 		},
 		{
-			"datasetId": "nishi_tokyo_bus_nt_bus",
-			"resourceId": "c2a57a1b-73d5-424f-ac8e-ab05900fad35",
-			"operator": "NishiTokyoBus",
-			"feed": "NTBus",
-			"name": "西東京バス / Nisitokyobus",
-			"orgName": "西東京バス / Nishi Tokyo Bus",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/NishiTokyoBus/NTBus.zip?date=20260622"
-		},
-		{
 			"datasetId": "nishitokyo_city_all_lines",
-			"resourceId": "15d043f9-4398-4ad1-9723-552b30f57971",
+			"resourceId": "3f1b64c2-68aa-4ea9-8402-2413fbdca62a",
 			"operator": "NishitokyoCity",
 			"feed": "AllLines",
 			"name": "西東京市はなバス / Nishitokyo City Hana Bus",
@@ -684,54 +384,6 @@
 			"fromDate": "",
 			"toDate": "",
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/NishitokyoCity/AllLines.zip?date=20260401"
-		},
-		{
-			"datasetId": "odakyu_bus_aii_lines",
-			"resourceId": "6dceccf4-7d3a-4051-a1af-7c0d89a9c582",
-			"operator": "OdakyuBus",
-			"feed": "AIILines",
-			"name": "小田急バス",
-			"orgName": "小田急バス / Odakyu Bus",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/OdakyuBus/AIILines.zip?date=20260601"
-		},
-		{
-			"datasetId": "okushiri_island_ferry_okushiri_esashi_ferry_route",
-			"resourceId": "f96ce088-80f8-4124-985c-08799ccd3490",
-			"operator": "OkushiriIslandFerry",
-			"feed": "Okushiri_Esashi_Ferry_Route",
-			"name": "オクシリアイランドフェリー / Okushiri Island Ferry",
-			"orgName": "オクシリアイランドフェリー株式会社 /...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/OkushiriIslandFerry/Okushiri_Esashi_Ferry_Route.zip?date=20260101"
-		},
-		{
-			"datasetId": "orange_ferry_all_lines",
-			"resourceId": "2115e2d4-dc0e-4dbf-b825-14f1da5bd841",
-			"operator": "OrangeFerry",
-			"feed": "AllLines",
-			"name": "四国開発フェリー株式会社（オレンジフェリー）",
-			"orgName": "四国開発フェリー株式会社 / Shikoku...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/OrangeFerry/AllLines.zip?date=20250517"
-		},
-		{
-			"datasetId": "oshima_bus_all_lines",
-			"resourceId": "3d00a60a-7082-4a8b-9e0a-8fd9b6bcbb75",
-			"operator": "OshimaBus",
-			"feed": "AllLines",
-			"name": "大島バス / Oshima Bus",
-			"orgName": "大島旅客自動車株式会社 / oshima-bus...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/OshimaBus/AllLines.zip?date=20250701"
 		},
 		{
 			"datasetId": "otone_kotsu_all_lines",
@@ -746,18 +398,6 @@
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/OtoneKotsu/AllLines.zip?date=20260409"
 		},
 		{
-			"datasetId": "sanwa_merchant_vessel_all_lines",
-			"resourceId": "099eb941-9f04-40b2-9a3a-0b4808cc30b1",
-			"operator": "SanwaMerchantVessel",
-			"feed": "AllLines",
-			"name": "三和商船株式会社",
-			"orgName": "三和商船株式会社 / Sanwa Merchant...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/SanwaMerchantVessel/AllLines.zip?date=20260105"
-		},
-		{
 			"datasetId": "sendai_municipal_bus_realtime_information",
 			"resourceId": "996d1b40-fce2-4ed0-b53b-e29f957bfa1b",
 			"operator": "SendaiMunicipal",
@@ -770,32 +410,8 @@
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/SendaiMunicipal/bus_realtime_information.zip?date=20260701"
 		},
 		{
-			"datasetId": "sentetsu_bus_all_lines",
-			"resourceId": "29f67c0f-34a2-40d9-ac3a-8bf6c2f8912d",
-			"operator": "SentetsuBus",
-			"feed": "AllLines",
-			"name": "船木鉄道株式会社 / Funaki Tetsudou Corporation",
-			"orgName": "船木鉄道株式会社 / Funaki Tetsudou...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/SentetsuBus/AllLines.zip?date=20251001"
-		},
-		{
-			"datasetId": "shimoden_shimoden_bus_gtfs_realtime",
-			"resourceId": "471d1836-e39d-4546-b49b-669022f6a2e0",
-			"operator": "Shimoden",
-			"feed": "Shimoden_BUS_GTFS_Realtime",
-			"name": "下津井電鉄株式会社（路線バス ODPTライセンス版 GTFS/GTFS Realtime / Shimoden BUS GTFS Static / GTFS Realtime",
-			"orgName": "下津井電鉄株式会社 /...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/Shimoden/Shimoden_BUS_GTFS_Realtime.zip?date=20250316"
-		},
-		{
 			"datasetId": "shimoden_shimoden_gtfs_static",
-			"resourceId": "478eb36f-6a6e-4ec9-b606-844c7c5146b7",
+			"resourceId": "548ba84b-328b-4c93-a710-f022bd0cb166",
 			"operator": "Shimoden",
 			"feed": "Shimoden_GTFS_Static",
 			"name": "下津井電鉄株式会社（路線バス GTFS-RUライセンス版） / Shimoden BUS GTFS",
@@ -803,19 +419,7 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/Shimoden/Shimoden_GTFS_Static.zip?date=20251216"
-		},
-		{
-			"datasetId": "suonada_ferry_all_lines",
-			"resourceId": "23a62613-166f-49e8-a889-2f182c8cd971",
-			"operator": "SuonadaFerry",
-			"feed": "AllLines",
-			"name": "周防灘フェリー フェリー関連情報 / Ferry information of Suonada Ferry",
-			"orgName": "周防灘フェリー株式会社 /...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/SuonadaFerry/AllLines.zip?date=20260218"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/Shimoden/Shimoden_GTFS_Static.zip?date=20260402"
 		},
 		{
 			"datasetId": "tachikawa_city_kururin_bus_alllines",
@@ -842,54 +446,6 @@
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip?date=20260421"
 		},
 		{
-			"datasetId": "taneyaku_kousokusen_all_lines",
-			"resourceId": "92b4fb82-ed66-48ed-91e6-a1b6af4e375d",
-			"operator": "TaneyakuKousokusen",
-			"feed": "AllLines",
-			"name": "種子屋久高速船 フェリー関連情報 / Ferry information of Taneyaku Kousokusen",
-			"orgName": "種子屋久高速船 / Taneyaku Kousokusen",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/TaneyakuKousokusen/AllLines.zip?date=20250901"
-		},
-		{
-			"datasetId": "tokai_kisen_all_lines",
-			"resourceId": "5eaaa182-9bda-4eff-be04-ce7956ae8f0b",
-			"operator": "TokaiKisen",
-			"feed": "AllLines",
-			"name": "東海汽船 / Tokai Kisen Co.,Ltd.",
-			"orgName": "東海汽船株式会社 / Tokai Kisen Co.,Ltd.",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/TokaiKisen/AllLines.zip?date=20250401"
-		},
-		{
-			"datasetId": "tokyo_chuo_city_alldata",
-			"resourceId": "6674c46b-d4aa-44a6-a427-0862df7b7189",
-			"operator": "TokyoChuoCity",
-			"feed": "Alldata",
-			"name": "コミュニティバス（江戸バス）",
-			"orgName": "中央区役所 / Chuo City Office",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/TokyoChuoCity/Alldata.zip?date=20250108"
-		},
-		{
-			"datasetId": "tokyo_cruise_ship_all_lines",
-			"resourceId": "c16d7b1c-efd6-429f-b6e5-880b834c4974",
-			"operator": "TokyoCruiseShip",
-			"feed": "AllLines",
-			"name": "TOKYO CRUISE / TOKYO CRUISE SHIP",
-			"orgName": "東京都観光汽船株式会社 / TOKYO CRUISE...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/TokyoCruiseShip/AllLines.zip?date=20250402"
-		},
-		{
 			"datasetId": "tokyo_suginami_city_green_slow_mobility",
 			"resourceId": "bdf054b4-8fe9-4673-a69f-6ac7e56e73aa",
 			"operator": "TokyoSuginamiCity",
@@ -914,42 +470,6 @@
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/TokyoTaitoCity/megurinCCBY40.zip?date=20251028"
 		},
 		{
-			"datasetId": "tokyu_bus_tokyubus_community_meguro_city",
-			"resourceId": "284624d8-811c-4a76-9a47-6c74ec1f2659",
-			"operator": "TokyuBus",
-			"feed": "tokyubus_community_MeguroCity",
-			"name": "目黒区コミュニティバス / Community Bus (Meguro City)",
-			"orgName": "東急バス株式会社 / Tokyu Bus Corporation",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/TokyuBus/tokyubus_community_MeguroCity.zip?date=20260601"
-		},
-		{
-			"datasetId": "tokyu_bus_tokyubus_community_ota_city",
-			"resourceId": "bb03dd66-578d-47d3-918c-e28866fd8851",
-			"operator": "TokyuBus",
-			"feed": "tokyubus_community_OtaCity",
-			"name": "大田区コミュニティバス / Community Bus (Ota City)",
-			"orgName": "東急バス株式会社 / Tokyu Bus Corporation",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/TokyuBus/tokyubus_community_OtaCity.zip?date=20260601"
-		},
-		{
-			"datasetId": "tokyu_bus_tokyubus_community_shinagawa_city",
-			"resourceId": "ccbb1165-224e-4fbc-93e8-a3aa7ce1defa",
-			"operator": "TokyuBus",
-			"feed": "tokyubus_community_ShinagawaCity",
-			"name": "品川区コミュニティバス / Community Bus (Shinagawa City)",
-			"orgName": "東急バス株式会社 / Tokyu Bus Corporation",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/TokyuBus/tokyubus_community_ShinagawaCity.zip?date=20260601"
-		},
-		{
 			"datasetId": "tosa_city_all_lines",
 			"resourceId": "f43c19ac-e4cd-4bf4-86e8-4897a6d5037c",
 			"operator": "TosaCity",
@@ -962,32 +482,8 @@
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/TosaCity/AllLines.zip?date=20260301"
 		},
 		{
-			"datasetId": "transportation_bureau_city_of_kawasaki_all_lines",
-			"resourceId": "139a9c5f-e7dd-46ad-8f92-fba6b7ed5ad5",
-			"operator": "TransportationBureau_CityOfKawasaki",
-			"feed": "AllLines",
-			"name": "川崎市バス / Kawasaki City Bus",
-			"orgName": "川崎市交通局 / Transportation...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/TransportationBureau_CityOfKawasaki/AllLines.zip?date=20260701"
-		},
-		{
-			"datasetId": "tsukuba_kankou_kotsu_co_co_bus_nogawa",
-			"resourceId": "e65848f5-645b-47a0-8611-c4850cf9a126",
-			"operator": "TsukubaKankouKotsu",
-			"feed": "CoCoBusNogawa",
-			"name": "小金井市CoCoバス（野川・七軒家循環）",
-			"orgName": "つくば観光交通株式会社 /...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/TsukubaKankouKotsu/CoCoBusNogawa.zip?date=20250401"
-		},
-		{
 			"datasetId": "uno_bus_all_lines",
-			"resourceId": "0bd377f9-8905-4fde-81d9-dc64d635a34f",
+			"resourceId": "ab765a91-acfe-43c4-9542-65ec43162cdc",
 			"operator": "UnoBus",
 			"feed": "AllLines",
 			"name": "宇野自動車（路線バス） / UNOBUS GTFS",
@@ -995,7 +491,7 @@
 			"license": null,
 			"fromDate": "",
 			"toDate": "",
-			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/UnoBus/AllLines.zip?date=20250301"
+			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/UnoBus/AllLines.zip?date=20260616"
 		},
 		{
 			"datasetId": "urban_development_aomori_city_all_lines",
@@ -1008,42 +504,6 @@
 			"fromDate": "",
 			"toDate": "",
 			"zipUrl": "https://api-public.odpt.org/api/v4/files/odpt/UrbanDevelopment_AomoriCity/AllLines.zip?date=20260401"
-		},
-		{
-			"datasetId": "uwajima_unyu_all_lines",
-			"resourceId": "1121d52e-b06b-4ccf-8332-9bb6d575254b",
-			"operator": "UwajimaUnyu",
-			"feed": "AllLines",
-			"name": "宇和島運輸株式会社 / Uwajima Unyu Ferries",
-			"orgName": "宇和島運輸株式会社 / Uwajima Unyu Ferries",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/UwajimaUnyu/AllLines.zip?date=20240701"
-		},
-		{
-			"datasetId": "yokohama_municipal_bus",
-			"resourceId": "060b169c-aeb5-415e-aa37-c8129b0a277e",
-			"operator": "YokohamaMunicipal",
-			"feed": "Bus",
-			"name": "横浜市営バス / Yokohama Municipal Bus",
-			"orgName": "横浜市交通局 / City of Yokohama,...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/YokohamaMunicipal/Bus.zip?date=20251227"
-		},
-		{
-			"datasetId": "yokohama_municipal_train",
-			"resourceId": "27ed8a34-c89f-4c5c-98af-5950f04183e2",
-			"operator": "YokohamaMunicipal",
-			"feed": "Train",
-			"name": "横浜市営地下鉄 / Yokohama Municipal Subway",
-			"orgName": "横浜市交通局 / City of Yokohama,...",
-			"license": null,
-			"fromDate": "",
-			"toDate": "",
-			"zipUrl": "https://api.odpt.org/api/v4/files/odpt/YokohamaMunicipal/Train.zip?date=20251226"
 		}
 	]
 }

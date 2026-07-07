@@ -56,6 +56,14 @@ function isGtfsFormat(format: string | undefined, labelText: string): boolean {
 	return format?.toLowerCase() === 'gtfs/gtfs-jp' || text(labelText).toLowerCase() === 'gtfs/gtfs-jp';
 }
 
+function containsGtfsFormat(value: string): boolean {
+	return text(value).toLowerCase().includes('gtfs/gtfs-jp');
+}
+
+function isPublicZipUrl(zipUrl: string): boolean {
+	return new URL(zipUrl).hostname === 'api-public.odpt.org';
+}
+
 function datasetMetadata($: cheerio.CheerioAPI, datasetUrl: string): DatasetMetadata {
 	const datasetId = datasetIdFromUrl(datasetUrl);
 	const name = text($('h1').first().text()) || datasetId;
@@ -84,6 +92,7 @@ function entryFromZipUrl(
 	metadata: DatasetMetadata,
 ): OdptManifestEntry | null {
 	const cleanZipUrl = sanitizedZipUrl(zipUrl);
+	if (!isPublicZipUrl(cleanZipUrl)) return null;
 	const match = cleanZipUrl.match(ODPT_ZIP_PATTERN);
 	if (!match) return null;
 	return {
@@ -176,11 +185,18 @@ export function parseDatasetPage(html: string, datasetUrl: string): OdptManifest
 export function parseDatasetResourceUrls(html: string, datasetUrl: string): string[] {
 	const $ = cheerio.load(html);
 	const urls = new Set<string>();
-	$('.resource-item a[href*="/resource/"]').each((_, link) => {
-		const href = $(link).attr('href');
+	$('.resource-item').each((_, item) => {
+		const resource = $(item);
+		const hasGtfs = resource
+			.find('[data-format], .label')
+			.toArray()
+			.some((label) => isGtfsFormat($(label).attr('data-format'), $(label).text()));
+		if (!hasGtfs && !containsGtfsFormat(resource.text())) return;
+
+		const href = resource.find('a[href*="/resource/"]').first().attr('href');
 		if (href) urls.add(resourceFetchUrl(href, datasetUrl));
 	});
-	return [...urls].sort(compareStrings);
+	return [...urls];
 }
 
 export function parseResourcePage(
@@ -236,13 +252,13 @@ export async function collectOdptManifest(fetcher: typeof fetch, now: Date): Pro
 		entries.push(...parseDatasetPage(html, datasetUrl));
 		const $ = cheerio.load(html);
 		const metadata = datasetMetadata($, datasetUrl);
-		const resourceUrl = parseDatasetResourceUrls(html, datasetUrl)[0];
-		if (resourceUrl) {
+		for (const resourceUrl of parseDatasetResourceUrls(html, datasetUrl)) {
 			const resourceRes = await fetcher(resourceUrl);
-			if (!resourceRes.ok) {
-				throw new Error(`ODPT resource fetch failed: ${resourceRes.status} ${resourceUrl}`);
-			}
-			entries.push(...parseResourcePage(await resourceRes.text(), resourceUrl, metadata));
+			if (!resourceRes.ok) continue;
+			const resourceEntries = parseResourcePage(await resourceRes.text(), resourceUrl, metadata);
+			if (resourceEntries.length === 0) continue;
+			entries.push(...resourceEntries);
+			break;
 		}
 	}
 

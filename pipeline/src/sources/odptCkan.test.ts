@@ -85,7 +85,28 @@ describe('odptCkan parser', () => {
 		]);
 	});
 
-	it('resourceページの認証トークンプレースホルダをzip URLから除去する', () => {
+	it('resource URLはGTFS/GTFS-JPに絞ってDOM順を維持する', () => {
+		const resourceUrls = parseDatasetResourceUrls(
+			`
+				<li class="resource-item">
+					<a class="heading" href="/dataset/example/resource/gtfs-z">GTFS/GTFS-JP</a>
+				</li>
+				<li class="resource-item">
+					<a class="heading" href="/dataset/example/resource/rt-a">GTFS-RT</a>
+				</li>
+				<li class="resource-item">
+					<a class="heading" href="/dataset/example/resource/gtfs-a">GTFS/GTFS-JP</a>
+				</li>
+			`,
+			'https://ckan.odpt.org/dataset/example',
+		);
+		expect(resourceUrls).toEqual([
+			'https://ckan.odpt.org/dataset/example/resource/gtfs-z?inner_span=True',
+			'https://ckan.odpt.org/dataset/example/resource/gtfs-a?inner_span=True',
+		]);
+	});
+
+	it('認証トークンが必要なzip URLはmanifest entryにしない', () => {
 		const entries = parseResourcePage(
 			'<a href="https://api.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip?date=20260421&amp;acl:consumerKey=[アクセストークン/YOUR_ACCESS_TOKEN]">download</a>',
 			'https://ckan.odpt.org/dataset/takasaki_city_yosiibus/resource/res-yosii?inner_span=True',
@@ -96,10 +117,7 @@ describe('odptCkan parser', () => {
 				license: 'CC BY 4.0',
 			},
 		);
-		expect(entries).toHaveLength(1);
-		expect(entries[0].zipUrl).toBe(
-			'https://api.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip?date=20260421',
-		);
+		expect(entries).toEqual([]);
 	});
 
 	it('operator/feed順で安定ソートする', () => {
