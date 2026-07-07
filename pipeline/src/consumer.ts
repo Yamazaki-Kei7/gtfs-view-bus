@@ -1,7 +1,7 @@
 import { maybeFinalizeJob, writeFeedStatus } from './finalize';
 import { processFeedTarget } from './feedProcessor';
-import type { FeedJobMessage, FeedJobStatus } from './jobState';
-import type { BucketLike } from './storage';
+import { type FeedJobMessage, type FeedJobStatus, jobStatusKey } from './jobState';
+import { readJson, type BucketLike } from './storage';
 
 export interface ProcessFeedJobMessageDeps {
 	bucket: BucketLike;
@@ -16,6 +16,15 @@ export async function processFeedJobMessage({
 	message,
 	now,
 }: ProcessFeedJobMessageDeps): Promise<void> {
+	const existingStatus = await readJson<FeedJobStatus>(
+		bucket,
+		jobStatusKey(message.jobId, message.target.id),
+	);
+	if (existingStatus) {
+		await maybeFinalizeJob({ bucket, jobId: message.jobId });
+		return;
+	}
+
 	const status = await processFeedTarget({ bucket, fetcher, target: message.target });
 	const jobStatus: FeedJobStatus = {
 		...status,

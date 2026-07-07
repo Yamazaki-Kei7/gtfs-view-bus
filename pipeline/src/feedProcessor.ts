@@ -19,6 +19,15 @@ interface FeedMeta {
 	shapeSourceCounts?: Record<string, number>;
 }
 
+interface FeedArtifacts {
+	bundleJson: string;
+	routesGeojson: string;
+	stopsGeojson: string;
+	timetableJson: string;
+	metaJson: string;
+	shapeSourceCounts: Record<string, number>;
+}
+
 export interface ProcessFeedTargetDeps {
 	bucket: BucketLike;
 	fetcher: typeof fetch;
@@ -56,15 +65,45 @@ async function fetchRoutesGeojson(fetcher: typeof fetch, url: string): Promise<s
 	return res.text();
 }
 
+async function buildFeedArtifacts(
+	fetcher: typeof fetch,
+	target: FeedTarget,
+): Promise<FeedArtifacts> {
+	const zip = await fetchBytes(fetcher, target.zipUrl);
+
+	// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する。
+	// ソースがURLを宣言しているのに取得できない場合はフィード単位のエラーにする。
+	const routesText = target.routesGeojsonUrl
+		? await fetchRoutesGeojson(fetcher, target.routesGeojsonUrl)
+		: null;
+
+	const files = unzipFeed(zip);
+	const bundle = convertFeed(files, routesText ?? undefined);
+	return {
+		bundleJson: JSON.stringify(bundle),
+		routesGeojson: routesText ?? JSON.stringify(shapesToGeojson(bundle)),
+		stopsGeojson: JSON.stringify(stopsToGeojson(files, stopRouteIds(files))),
+		timetableJson: JSON.stringify(buildTimetableIndex(files)),
+		metaJson: JSON.stringify({
+			versionId: target.versionId,
+			schemaVersion: OUTPUT_SCHEMA_VERSION,
+			shapeSourceCounts: bundle.shapeSourceCounts,
+		}),
+		shapeSourceCounts: bundle.shapeSourceCounts,
+	};
+}
+
 export async function processFeedTarget({
 	bucket,
 	fetcher,
 	target,
 }: ProcessFeedTargetDeps): Promise<FeedStatus> {
 	const base = statusBase(target);
+	const metaObj = await bucket.get(`feeds/${target.id}/meta.json`);
+	const metaText = metaObj ? await metaObj.text() : null;
+	let artifacts: FeedArtifacts;
 	try {
-		const metaObj = await bucket.get(`feeds/${target.id}/meta.json`);
-		const meta = metaObj ? (JSON.parse(await metaObj.text()) as FeedMeta) : null;
+		const meta = metaText ? (JSON.parse(metaText) as FeedMeta) : null;
 		// versionId '' は版数解決に失敗したエラー記述子(ODPT)なので unchanged 扱いにしない。
 		// versionId が一致していても出力スキーマ版が古ければ再処理する(既存フィードの移行)
 		if (
@@ -76,44 +115,7 @@ export async function processFeedTarget({
 			return { ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts };
 		}
 
-		const zip = await fetchBytes(fetcher, target.zipUrl);
-
-		// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する。
-		// ソースがURLを宣言しているのに取得できない場合はフィード単位のエラーにする。
-		const routesText = target.routesGeojsonUrl
-			? await fetchRoutesGeojson(fetcher, target.routesGeojsonUrl)
-			: null;
-
-		const files = unzipFeed(zip);
-		const bundle = convertFeed(files, routesText ?? undefined);
-		await bucket.put(`feeds/${target.id}/bundle.json`, JSON.stringify(bundle));
-		await bucket.put(
-			`feeds/${target.id}/routes.geojson`,
-			routesText ?? JSON.stringify(shapesToGeojson(bundle)),
-		);
-
-		// 停留所レイヤは常に stops.txt から生成し、各停留所に routeIds(通る路線)を付与する。
-		await bucket.put(
-			`feeds/${target.id}/stops.geojson`,
-			JSON.stringify(stopsToGeojson(files, stopRouteIds(files))),
-		);
-
-		// 停留所別の時刻表インデックス。アプリは停留所クリック時に遅延ロードする。
-		await bucket.put(
-			`feeds/${target.id}/timetable.json`,
-			JSON.stringify(buildTimetableIndex(files)),
-		);
-
-		// meta.json はこのフィードの最後の書き込みにし、更新完了マーカーとして扱う。
-		await bucket.put(
-			`feeds/${target.id}/meta.json`,
-			JSON.stringify({
-				versionId: target.versionId,
-				schemaVersion: OUTPUT_SCHEMA_VERSION,
-				shapeSourceCounts: bundle.shapeSourceCounts,
-			}),
-		);
-		return { ...base, status: 'updated', shapeSourceCounts: bundle.shapeSourceCounts };
+		artifacts = await buildFeedArtifacts(fetcher, target);
 	} catch (error) {
 		return {
 			...base,
@@ -121,4 +123,17 @@ export async function processFeedTarget({
 			error: error instanceof Error ? error.message : String(error),
 		};
 	}
+
+	await bucket.put(`feeds/${target.id}/bundle.json`, artifacts.bundleJson);
+	await bucket.put(`feeds/${target.id}/routes.geojson`, artifacts.routesGeojson);
+
+	// 停留所レイヤは常に stops.txt から生成し、各停留所に routeIds(通る路線)を付与する。
+	await bucket.put(`feeds/${target.id}/stops.geojson`, artifacts.stopsGeojson);
+
+	// 停留所別の時刻表インデックス。アプリは停留所クリック時に遅延ロードする。
+	await bucket.put(`feeds/${target.id}/timetable.json`, artifacts.timetableJson);
+
+	// meta.json はこのフィードの最後の書き込みにし、更新完了マーカーとして扱う。
+	await bucket.put(`feeds/${target.id}/meta.json`, artifacts.metaJson);
+	return { ...base, status: 'updated', shapeSourceCounts: artifacts.shapeSourceCounts };
 }

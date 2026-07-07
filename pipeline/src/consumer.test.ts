@@ -148,4 +148,41 @@ describe('processFeedJobMessage', () => {
 		expect(bucket.store.has(jobStatusKey('job-1', 'feed-1'))).toBe(true);
 		expect(bucket.store.has('feeds.json')).toBe(false);
 	});
+
+	it('既存statusがある再試行ではフィード処理を再実行せずfinalizeだけ行う', async () => {
+		const bucket = fakeBucket();
+		const body = message();
+		saveManifest(bucket, body);
+		const savedStatus: FeedJobStatus = {
+			jobId: 'job-1',
+			finishedAt: '2026-07-07T12:01:00.000Z',
+			id: body.target.id,
+			name: body.target.name,
+			orgName: body.target.orgName,
+			license: body.target.license,
+			fromDate: body.target.fromDate,
+			toDate: body.target.toDate,
+			source: body.target.source,
+			status: 'updated',
+			shapeSourceCounts: { shapes: 1, route: 0, straight: 0 },
+		};
+		bucket.store.set(jobStatusKey('job-1', 'feed-1'), JSON.stringify(savedStatus));
+		const impl = async (): Promise<Response> => {
+			throw new Error('fetch should not run on status retry');
+		};
+
+		await processFeedJobMessage({
+			bucket,
+			fetcher: impl as typeof fetch,
+			message: body,
+			now: () => new Date('2026-07-07T12:05:00.000Z'),
+		});
+
+		const saved = JSON.parse(bucket.store.get(jobStatusKey('job-1', 'feed-1')) ?? '{}') as FeedJobStatus;
+		expect(saved).toEqual(savedStatus);
+		const index = JSON.parse(bucket.store.get('feeds.json') ?? '{}') as {
+			feeds: { id: string; status: string }[];
+		};
+		expect(index.feeds).toEqual([expect.objectContaining({ id: 'feed-1', status: 'updated' })]);
+	});
 });

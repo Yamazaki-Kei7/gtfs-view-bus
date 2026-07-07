@@ -95,4 +95,18 @@ describe('processFeedTarget', () => {
 		expect(status.status).toBe('error');
 		expect(status.error).toBe('zip fetch failed: 404');
 	});
+
+	it('R2書き込み失敗はerror statusに丸めずthrowする', async () => {
+		const bucket = fakeBucket();
+		const failingBucket: BucketLike = {
+			...bucket,
+			async put(key, value) {
+				if (key.endsWith('/bundle.json')) throw new Error('R2 put failed');
+				await bucket.put(key, value);
+			},
+		};
+		await expect(
+			processFeedTarget({ bucket: failingBucket, fetcher: fetcher(), target: target() }),
+		).rejects.toThrow('R2 put failed');
+	});
 });
