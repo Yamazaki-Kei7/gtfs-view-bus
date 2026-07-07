@@ -8,6 +8,7 @@
 		"deploy": "wrangler deploy",
 		"test": "vitest run",
 		"check": "tsc --noEmit",
+		"update:odpt-manifest": "node --import tsx scripts/update-odpt-manifest.ts",
 		"cf:check": "WRANGLER_LOG_PATH=../.tmp/wrangler-logs wrangler deploy --dry-run",
 		"cf:types": "wrangler types"
 	},
@@ -16,7 +17,9 @@
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20260628.1",
+		"cheerio": "^1.2.0",
 		"fflate": "^0.8.3",
+		"tsx": "^4.22.4",
 		"typescript": "^6.0.3",
 		"vitest": "^4.1.9",
 		"wrangler": "^4.105.0"
