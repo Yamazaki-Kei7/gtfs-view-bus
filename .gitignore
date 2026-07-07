@@ -37,6 +37,7 @@ coverage/
 .cache/
 temp/
 .tmp/
+.superpowers/
 
 # Playwright MCP のスナップショット/スクリーンショット(検証用の一時成果物)
 .playwright-mcp/
