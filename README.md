@@ -1,10 +1,12 @@
 # gtfs-view-bus
 
-群馬県のGTFSフィード(gtfs-data.jp・公共交通オープンデータセンター)をもとに、指定日時のバス推定位置を地図上に表示するWebGIS。
+全国のGTFSフィード(gtfs-data.jp・公共交通オープンデータセンター)をもとに、指定日時のバス推定位置を地図上に表示するWebGIS。
 
 - 設計書: `docs/superpowers/specs/2026-07-05-gtfs-bus-position-webgis-design.md`
 - 実装計画: `docs/superpowers/plans/2026-07-05-gtfs-bus-position-webgis.md`
-- 構成: `pipeline/`(月次変換Worker) → R2 → `app/`(SvelteKit on Workers) → MapLibre
+- 全国パイプライン設計: `docs/superpowers/specs/2026-07-07-nationwide-pipeline-design.md`
+- 全国パイプライン計画: `docs/superpowers/plans/2026-07-07-nationwide-pipeline.md`
+- 構成: `pipeline/`(月次Cron + Queues変換Worker) → R2 → `app/`(SvelteKit on Workers) → MapLibre
 - 共有ロジック: `packages/gtfs-core/`(CSVパース・shape射影・キーフレーム補間・カレンダー判定)
 - IaC: `infra/`(Terraform, R2バケット) + 各 `wrangler.jsonc`
 
@@ -39,9 +41,15 @@ just dev
 
 just を使わない場合の生コマンドは `justfile` を参照。
 
+### Pipeline
+
+`pipeline/` は Cloudflare Workers Cron + Queues + R2 で GTFS を月次変換する。公開形式は `feeds.json` と `feeds/<feedId>/...` を維持するため、アプリ側の `/data/*` 読み取り契約は変えない。
+
+詳しい検証手順と ODPT マニフェスト更新手順は `pipeline/README.md` を参照。
+
 ### Cronを手動実行する
 
-パイプラインWorkerは月次CronでR2へ `feeds.json` と `feeds/*` を生成する。
+パイプラインWorkerは月次Cronでフィード処理ジョブを Queues へ投入し、Queue consumer がR2へ `feeds.json` と `feeds/*` を生成する。
 WorkerをデプロイしてもCronは即時実行されないため、データソース追加後や初回投入時は手動実行が必要。
 
 #### ローカルR2を更新する
@@ -67,50 +75,11 @@ pnpm dev
 curl -fsS "http://localhost:8787/__scheduled?cron=0+20+L+*+*"
 ```
 
-#### 本番R2を一度だけ更新する
+#### 本番初回実行を確認する
 
-本番WorkerのCronを待たずに、本番R2へデータを再生成する手順。
-`wrangler dev --remote` はCloudflare上の一時プレビュー環境でWorkerを実行するため、GTFS変換処理ではCPU制限に達することがある。
-そのため、一時的なWrangler設定でR2バインディングだけ `remote: true` にし、Worker本体はローカルで実行する。
-本番R2を書き換えるため、実行前に対象ブランチがデプロイ済みコードと一致していることを確認する。
+本番WorkerのCronを待たずに初回投入する場合は、デプロイ済みWorkerの scheduled handler を手動実行し、Queues と R2 のジョブ状態を確認する。全国全件の変換はCPU時間とQueue処理量が大きいため、本番運用は Workers Paid を前提にする。
 
-前提: リポジトリルートの `.env` に `CLOUDFLARE_API_TOKEN` と `CLOUDFLARE_ACCOUNT_ID` が入っていること。
-
-```bash
-# ターミナル1: Workerはローカル実行、R2だけ本番接続にする一時configを作成して起動
-cd pipeline
-mkdir -p .tmp
-cat > .tmp/wrangler-remote-r2.jsonc <<EOF
-{
-  "name": "gtfs-view-bus-pipeline",
-  "main": "$(pwd)/src/index.ts",
-  "compatibility_date": "2026-06-01",
-  "triggers": { "crons": ["0 20 L * *"] },
-  "r2_buckets": [
-    { "binding": "DATA_BUCKET", "bucket_name": "gtfs-view-bus-data", "remote": true }
-  ],
-  "vars": { "GTFS_PREF_ID": "10" }
-}
-EOF
-
-set -a
-source ../.env
-set +a
-WRANGLER_LOG_PATH=.tmp/wrangler-logs pnpm exec wrangler dev \
-  --config .tmp/wrangler-remote-r2.jsonc \
-  --test-scheduled \
-  --port 8791 \
-  --show-interactive-dev-session false \
-  --log-level info
-```
-
-別ターミナルでCronを発火する:
-
-```bash
-curl -fsS "http://127.0.0.1:8791/__scheduled?cron=0+20+L+*+*"
-```
-
-実行後、本番R2の `feeds.json` を取得して `generatedAt` とフィード件数を確認する:
+実行後、本番R2の `feeds.json` と job summary を取得して `generatedAt`、フィード件数、失敗件数を確認する:
 
 ```bash
 cd pipeline
@@ -125,6 +94,8 @@ WRANGLER_LOG_PATH=.tmp/wrangler-logs pnpm exec wrangler r2 object get \
 node -e 'const fs = require("fs"); const j = JSON.parse(fs.readFileSync(".tmp/remote-feeds.json", "utf8")); const counts = j.feeds.reduce((m, f) => { const k = f.source || "missing"; m[k] = (m[k] || 0) + 1; return m; }, {}); console.log(j.generatedAt); console.log(j.feeds.length); console.log(counts);'
 ```
 
+`pipeline/jobs/current.json` の `jobId` をもとに `pipeline/jobs/<jobId>/summary.json` も確認する。DLQ にメッセージが残っている場合は、該当フィードの status と Worker ログを見てから再実行する。
+
 アプリ側の `/data/*` は `cache-control: public, max-age=300` のため、R2更新後の画面反映には最大5分程度かかる。
 
 ## デプロイ
@@ -132,7 +103,7 @@ node -e 'const fs = require("fs"); const j = JSON.parse(fs.readFileSync(".tmp/re
 1. `infra/` で R2 バケットを作成(infra/README.md 参照)
 2. GitHub Environment `production` に `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` を設定
 3. main へマージすると GitHub Actions がデプロイ
-4. 初回はデータが空なので、上記「本番R2を一度だけ更新する」の手順でデータを投入する
+4. 初回はデータが空なので、上記「本番初回実行を確認する」の手順でデータを投入する
 
 ## ライセンス・出典
 
