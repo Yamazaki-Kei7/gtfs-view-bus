@@ -2,7 +2,11 @@
 	import { MAX_TIME_SEC, nowJst, sim } from '$lib/sim.svelte';
 	import type { FeedIndexEntry } from '$lib/data';
 
-	let { busCount, feedInfos }: { busCount: number; feedInfos: FeedIndexEntry[] } = $props();
+	let {
+		busCount,
+		feedInfos,
+		mapAttribution,
+	}: { busCount: number; feedInfos: FeedIndexEntry[]; mapAttribution: string } = $props();
 
 	const timeLabel = $derived(
 		`${String(Math.floor(sim.timeSec / 3600)).padStart(2, '0')}:${String(
@@ -144,7 +148,7 @@
 						? '・更新失敗'
 						: ''})
 				{/each}
-				— {credits} / 地図: © OpenStreetMap contributors | MapLibre
+				— {credits} / 地図: {mapAttribution} | MapLibre
 			</div>
 		{/if}
 	</div>
