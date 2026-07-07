@@ -344,8 +344,10 @@
 	const busCorePaint: CircleLayerSpecification['paint'] = $derived({
 		'circle-radius': BUS_RADIUS + Math.sin(pulse * Math.PI * 2) * 1.2,
 		'circle-color': ROUTE_COLOR_EXPR,
+		'circle-opacity': 0.78,
 		'circle-stroke-width': 2,
 		'circle-stroke-color': '#ffffff',
+		'circle-stroke-opacity': 0.85,
 	});
 
 	$effect(() => {
@@ -439,7 +441,7 @@
 			<LineLayer
 				filter={activeRouteFilter}
 				layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-				paint={{ 'line-color': ROUTE_COLOR_EXPR, 'line-width': 2, 'line-opacity': 0.55 }}
+				paint={{ 'line-color': ROUTE_COLOR_EXPR, 'line-width': 3, 'line-opacity': 0.6 }}
 			/>
 			<!-- クリック判定用の透明な太いライン(運行路線のみ) -->
 			<LineLayer
@@ -492,7 +494,8 @@
 					'circle-color': '#ffffff',
 					'circle-stroke-width': STOP_ACTIVE_STROKE,
 					'circle-stroke-color': ROUTE_COLOR_EXPR,
-					'circle-opacity': 0.95,
+					'circle-opacity': 0.8,
+					'circle-stroke-opacity': 0.85,
 				}}
 				onclick={handleStopClick}
 				onmouseenter={() => (cursor = 'pointer')}
