@@ -6,7 +6,7 @@ import {
 	stopsToGeojson,
 	unzipFeed,
 } from 'gtfs-core';
-import type { FeedDescriptor, FeedSource, SourceId } from './sources/types';
+import type { FeedSource, FeedTarget, SourceId } from './sources/types';
 
 /** R2Bucket と構造的に互換な最小インターフェース(テスト差し替え用) */
 export interface BucketLike {
@@ -76,9 +76,9 @@ export async function runPipeline({
 	let anyListFailed = false;
 
 	for (const source of sources) {
-		let descriptors: FeedDescriptor[];
+		let targets: FeedTarget[];
 		try {
-			descriptors = await source.listFeeds(fetcher);
+			targets = await source.listTargets(fetcher);
 		} catch (e) {
 			// 一覧取得に失敗したソースは前回のエントリをそのまま引き継ぐ(地図からの全消え防止)。
 			// 旧形式feeds.json(sourceフィールド無し)は gtfs-data.jp のエントリとして扱い、補完して正規化する。
@@ -91,7 +91,7 @@ export async function runPipeline({
 			statuses.push(...carried.map((f) => ({ ...f, source: source.sourceId })));
 			continue;
 		}
-		for (const d of descriptors) {
+		for (const d of targets) {
 			statuses.push(await processFeed(bucket, fetcher, d));
 		}
 	}
@@ -119,7 +119,7 @@ async function readIndex(bucket: BucketLike): Promise<FeedsIndex | null> {
 async function processFeed(
 	bucket: BucketLike,
 	fetcher: typeof fetch,
-	d: FeedDescriptor,
+	d: FeedTarget,
 ): Promise<FeedStatus> {
 	const base = {
 		id: d.id,
@@ -144,7 +144,12 @@ async function processFeed(
 			return { ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts };
 		}
 
-		const zip = await d.fetchZip(fetcher);
+		if (!d.zipUrl) {
+			throw new Error('zip url is missing');
+		}
+		const zipRes = await fetcher(d.zipUrl);
+		if (!zipRes.ok) throw new Error(`zip fetch failed: ${zipRes.status}`);
+		const zip = new Uint8Array(await zipRes.arrayBuffer());
 
 		// routes.geojson は shapes.txt なしフィードの形状源になるため変換前に取得する。
 		// ソースがURLを宣言しているのに取得できない場合は throw してフィード単位のエラーにする:

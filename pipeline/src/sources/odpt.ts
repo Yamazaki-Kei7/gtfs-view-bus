@@ -1,4 +1,4 @@
-import type { FeedDescriptor, FeedSource } from './types';
+import type { FeedSource, FeedTarget } from './types';
 
 interface OdptFeedDef {
 	operator: string;
@@ -69,20 +69,17 @@ async function sha256Hex(data: Uint8Array<ArrayBuffer>): Promise<string> {
  * 302のLocationパスにはデータ版数入りのファイル名が含まれるため、
  * zip本体をダウンロードせずに更新有無を判定できる。
  */
-async function resolveVersion(
-	fetcher: typeof fetch,
-	def: OdptFeedDef,
-): Promise<{ versionId: string; body?: Uint8Array }> {
+async function resolveVersion(fetcher: typeof fetch, def: OdptFeedDef): Promise<string> {
 	const res = await fetcher(zipUrl(def), { redirect: 'manual' });
 	if (res.status >= 300 && res.status < 400) {
 		const loc = res.headers.get('location');
 		if (!loc) throw new Error(`redirect without location: ${def.operator}/${def.feed}`);
-		return { versionId: new URL(loc, API_BASE).pathname };
+		return new URL(loc, API_BASE).pathname;
 	}
 	if (res.ok) {
-		// リダイレクトを挟まない構成に変わった場合: 本体のハッシュを版数とし、本体は変換に再利用する
+		// リダイレクトを挟まない構成に変わった場合: 本体のハッシュを版数とする
 		const body = new Uint8Array(await res.arrayBuffer());
-		return { versionId: await sha256Hex(body), body };
+		return sha256Hex(body);
 	}
 	throw new Error(`odpt zip fetch failed: ${res.status} (${def.operator}/${def.feed})`);
 }
@@ -91,8 +88,8 @@ async function resolveVersion(
 export function createOdptSource(): FeedSource {
 	return {
 		sourceId: 'odpt',
-		async listFeeds(fetcher) {
-			const descriptors: FeedDescriptor[] = [];
+		async listTargets(fetcher) {
+			const descriptors: FeedTarget[] = [];
 			for (const def of ODPT_FEEDS) {
 				const base = {
 					id: `odpt~${def.operator}~${def.feed}`,
@@ -102,27 +99,19 @@ export function createOdptSource(): FeedSource {
 					fromDate: '',
 					toDate: '',
 					source: 'odpt' as const,
+					zipUrl: zipUrl(def),
 				};
 				try {
-					const { versionId, body } = await resolveVersion(fetcher, def);
+					const versionId = await resolveVersion(fetcher, def);
 					descriptors.push({
 						...base,
 						versionId,
-						fetchZip: body
-							? async () => body
-							: async (f) => {
-									const res = await f(zipUrl(def));
-									if (!res.ok) throw new Error(`zip fetch failed: ${res.status}`);
-									return new Uint8Array(await res.arrayBuffer());
-								},
 					});
 				} catch (e) {
-					// 版数解決に失敗したフィードはメインループのフィード単位エラー処理に載せるため、
-					// 「fetchZipが必ず失敗する記述子」として一覧に残す(掃除の対象にもならない)
+					// 版数解決に失敗したフィードはメインループのフィード単位エラー処理に載せるため残す
 					descriptors.push({
 						...base,
 						versionId: '',
-						fetchZip: () => Promise.reject(e instanceof Error ? e : new Error(String(e))),
 					});
 				}
 			}

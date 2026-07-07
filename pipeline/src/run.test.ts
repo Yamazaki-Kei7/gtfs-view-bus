@@ -3,7 +3,7 @@ import { FIXTURE_FILES, FIXTURE_ROUTES_GEOJSON } from 'gtfs-core';
 import { describe, expect, it } from 'vitest';
 import { runPipeline, type BucketLike } from './run';
 import { createGtfsDataJpSource, type GtfsFileEntry } from './sources/gtfsDataJp';
-import type { FeedDescriptor, FeedSource } from './sources/types';
+import type { FeedTarget, FeedSource } from './sources/types';
 
 function fakeBucket(options?: {
 	/** listの1ページあたり件数。指定するとtruncated/cursorのページングを模す */
@@ -68,6 +68,7 @@ function fetcherFor(entries: GtfsFileEntry[]): typeof fetch {
 			return new Response(JSON.stringify({ code: 200, message: 'ok', body: entries }));
 		}
 		if (url.endsWith('feed.zip')) return new Response(FIXTURE_ZIP);
+		if (url.includes('.zip?')) return new Response(FIXTURE_ZIP);
 		if (url.endsWith('routes.geojson')) return new Response(FIXTURE_ROUTES_GEOJSON);
 		if (url.endsWith('.geojson')) {
 			return new Response(JSON.stringify({ type: 'FeatureCollection', features: [] }));
@@ -78,7 +79,7 @@ function fetcherFor(entries: GtfsFileEntry[]): typeof fetch {
 }
 
 /** GeoJSON別配布の無いODPT風フィードを模した記述子 */
-function odptDescriptor(): FeedDescriptor {
+function odptDescriptor(): FeedTarget {
 	return {
 		id: 'odpt~TestOp~AllLines',
 		name: 'テスト事業者(全路線)',
@@ -88,12 +89,12 @@ function odptDescriptor(): FeedDescriptor {
 		toDate: '',
 		source: 'odpt',
 		versionId: '/files-open/odpt/TestOp/AllLines-20260601.zip',
-		fetchZip: async () => FIXTURE_ZIP,
+		zipUrl: 'https://api-public.odpt.org/api/v4/files/odpt/TestOp/AllLines.zip?date=current',
 	};
 }
 
-function stubSource(descriptors: FeedDescriptor[]): FeedSource {
-	return { sourceId: 'odpt', listFeeds: async () => descriptors };
+function stubSource(descriptors: FeedTarget[]): FeedSource {
+	return { sourceId: 'odpt', listTargets: async () => descriptors };
 }
 
 describe('runPipeline', () => {
@@ -102,7 +103,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(statuses).toHaveLength(1);
 		expect(statuses[0].status).toBe('updated');
@@ -143,7 +144,7 @@ describe('runPipeline', () => {
 		const deps = {
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		};
 		await runPipeline(deps);
 		const second = await runPipeline(deps);
@@ -167,7 +168,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(statuses[0].status).toBe('unchanged');
 		expect(statuses[0].shapeSourceCounts).toEqual({ shapes: 3, route: 0, straight: 0 });
@@ -192,7 +193,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		// versionId 一致でも再処理され(updated)、停留所に routeIds が付与される
 		expect(statuses[0].status).toBe('updated');
@@ -224,7 +225,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 
 		expect(statuses[0].status).toBe('updated');
@@ -249,7 +250,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(statuses[0].status).toBe('updated');
 		expect(bucket.store.has(`feeds/${id}/timetable.json`)).toBe(true);
@@ -268,7 +269,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([bad, entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(statuses.find((s) => s.id.startsWith('badorg'))?.status).toBe('error');
 		expect(statuses.find((s) => s.id.startsWith('testorg'))?.status).toBe('updated');
@@ -299,7 +300,7 @@ describe('runPipeline', () => {
 		await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(bucket.store.has('feeds/testorg~testfeed~2025-01-01/bundle.json')).toBe(false);
 		expect(bucket.store.has('feeds/testorg~testfeed~2025-01-01/meta.json')).toBe(false);
@@ -316,7 +317,7 @@ describe('runPipeline', () => {
 		await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		// アクティブなフィードのキーは残り、孤児キーは全ページ分削除される
 		const remaining = [...bucket.store.keys()].filter((k) => k.startsWith('feeds/orphan'));
@@ -335,7 +336,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([bad]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(statuses[0].status).toBe('error');
 		expect(bucket.store.has('feeds/badorg~testfeed~2026-04-01/bundle.json')).toBe(true);
@@ -366,7 +367,7 @@ describe('runPipeline', () => {
 		bucket.store.set('feeds/orphan~X~Y/bundle.json', '{}');
 		const failingSource: FeedSource = {
 			sourceId: 'odpt',
-			listFeeds: () => Promise.reject(new Error('down')),
+			listTargets: () => Promise.reject(new Error('down')),
 		};
 		const statuses = await runPipeline({
 			bucket,
@@ -402,7 +403,7 @@ describe('runPipeline', () => {
 		);
 		const failingSource: FeedSource = {
 			sourceId: 'gtfs-data.jp',
-			listFeeds: () => Promise.reject(new Error('down')),
+			listTargets: () => Promise.reject(new Error('down')),
 		};
 		const statuses = await runPipeline({
 			bucket,
@@ -419,12 +420,12 @@ describe('runPipeline', () => {
 		const bucket = fakeBucket();
 		const failingSource: FeedSource = {
 			sourceId: 'odpt',
-			listFeeds: () => Promise.reject(new Error('down')),
+			listTargets: () => Promise.reject(new Error('down')),
 		};
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10'), failingSource],
+			sources: [createGtfsDataJpSource({ prefIds: [10] }), failingSource],
 		});
 		expect(statuses).toHaveLength(1);
 		expect(statuses[0].status).toBe('updated');

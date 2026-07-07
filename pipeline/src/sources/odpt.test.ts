@@ -22,36 +22,34 @@ function redirectFetcher(): typeof fetch {
 
 describe('createOdptSource', () => {
 	it('302のLocationパスをversionIdにする(SASクエリは含めない)', async () => {
-		const feeds = await createOdptSource().listFeeds(redirectFetcher());
-		expect(feeds).toHaveLength(ODPT_FEEDS.length);
-		const yosii = feeds.find((f) => f.id === 'odpt~TakasakiCity~yosiibus');
+		const targets = await createOdptSource().listTargets(redirectFetcher());
+		expect(targets).toHaveLength(ODPT_FEEDS.length);
+		const yosii = targets.find((f) => f.id === 'odpt~TakasakiCity~yosiibus');
 		expect(yosii?.versionId).toBe('/files-open/odpt/TakasakiCity/yosiibus-20260421.zip');
 		expect(yosii?.source).toBe('odpt');
 		expect(yosii?.license).toBe('CC BY 4.0');
 		expect(yosii?.routesGeojsonUrl).toBeUndefined();
 	});
 
-	it('fetchZipはリダイレクト追従でzip本体を取得する', async () => {
-		const feeds = await createOdptSource().listFeeds(redirectFetcher());
-		expect(await feeds[0].fetchZip(redirectFetcher())).toEqual(new Uint8Array([9, 9, 9]));
+	it('zipUrlはODPTダウンロードAPIを指す', async () => {
+		const targets = await createOdptSource().listTargets(redirectFetcher());
+		const zipRes = await redirectFetcher()(targets[0].zipUrl);
+		expect(await zipRes.arrayBuffer()).toEqual(new Uint8Array([9, 9, 9]).buffer);
 	});
 
-	it('200直返しの場合はbodyのSHA-256をversionIdにし、bodyを再利用する', async () => {
+	it('200直返しの場合はbodyのSHA-256をversionIdにする', async () => {
 		const impl = async (): Promise<Response> => new Response(new Uint8Array([1, 2, 3]));
-		const feeds = await createOdptSource().listFeeds(impl as typeof fetch);
-		const d = feeds[0];
+		const targets = await createOdptSource().listTargets(impl as typeof fetch);
+		const d = targets[0];
 		expect(d.versionId).toMatch(/^[0-9a-f]{64}$/);
-		// fetchZipは追加フェッチせずbodyを返す(必ず失敗するfetcherを渡して確認)
-		const failing = (async (): Promise<Response> =>
-			new Response('x', { status: 500 })) as typeof fetch;
-		expect(await d.fetchZip(failing)).toEqual(new Uint8Array([1, 2, 3]));
+		const zipRes = await impl();
+		expect(await zipRes.arrayBuffer()).toEqual(new Uint8Array([1, 2, 3]).buffer);
 	});
 
-	it('版数解決に失敗したフィードは一覧に残り、fetchZipが失敗する', async () => {
+	it('版数解決に失敗したフィードはversionId空文字を残す', async () => {
 		const impl = async (): Promise<Response> => new Response('down', { status: 503 });
-		const feeds = await createOdptSource().listFeeds(impl as typeof fetch);
-		expect(feeds).toHaveLength(ODPT_FEEDS.length);
-		expect(feeds[0].versionId).toBe('');
-		await expect(feeds[0].fetchZip(impl as typeof fetch)).rejects.toThrow('503');
+		const targets = await createOdptSource().listTargets(impl as typeof fetch);
+		expect(targets).toHaveLength(ODPT_FEEDS.length);
+		expect(targets[0].versionId).toBe('');
 	});
 });

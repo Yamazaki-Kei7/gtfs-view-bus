@@ -19,42 +19,62 @@ function entry(overrides: Partial<GtfsFileEntry>): GtfsFileEntry {
 	};
 }
 
-function fetcherFor(entries: GtfsFileEntry[]): typeof fetch {
+function fetcherFor(entries: GtfsFileEntry[], calls: string[]): typeof fetch {
 	const impl = async (input: RequestInfo | URL): Promise<Response> => {
 		const url = String(input);
+		calls.push(url);
 		if (url.includes('/v2/files')) {
 			return new Response(JSON.stringify({ code: 200, message: 'ok', body: entries }));
 		}
-		if (url.endsWith('feed.zip')) return new Response(new Uint8Array([1, 2, 3]));
 		return new Response('not found', { status: 404 });
 	};
 	return impl as typeof fetch;
 }
 
 describe('createGtfsDataJpSource', () => {
-	it('一覧APIのエントリをFeedDescriptorへ変換する', async () => {
-		const feeds = await createGtfsDataJpSource('10').listFeeds(fetcherFor([entry({})]));
-		expect(feeds).toHaveLength(1);
-		const d = feeds[0];
-		expect(d.id).toBe('testorg~testfeed~2026-04-01');
-		expect(d.versionId).toBe('uid-1');
-		expect(d.source).toBe('gtfs-data.jp');
-		expect(d.license).toBe('CC BY 4.0');
-		expect(d.routesGeojsonUrl).toBe('https://example.com/routes.geojson');
-		expect(await d.fetchZip(fetcherFor([]))).toEqual(new Uint8Array([1, 2, 3]));
+	it('prefIds未指定なら全国全件APIを呼びFeedTargetへ変換する', async () => {
+		const calls: string[] = [];
+		const targets = await createGtfsDataJpSource().listTargets(fetcherFor([entry({})], calls));
+		expect(calls).toEqual(['https://api.gtfs-data.jp/v2/files']);
+		expect(targets).toHaveLength(1);
+		expect(targets[0]).toEqual({
+			id: 'testorg~testfeed~2026-04-01',
+			name: 'テストバス',
+			orgName: 'テスト協議会',
+			license: 'CC BY 4.0',
+			fromDate: '2026-04-01',
+			toDate: '2027-03-31',
+			source: 'gtfs-data.jp',
+			versionId: 'uid-1',
+			zipUrl: 'https://example.com/feed.zip',
+			routesGeojsonUrl: 'https://example.com/routes.geojson',
+		});
+	});
+
+	it('prefIds指定時は県別APIを順に呼ぶ', async () => {
+		const calls: string[] = [];
+		const targets = await createGtfsDataJpSource({ prefIds: [10, 11] }).listTargets(
+			fetcherFor([entry({})], calls),
+		);
+		expect(targets).toHaveLength(2);
+		expect(calls).toEqual([
+			'https://api.gtfs-data.jp/v2/files?pref=10',
+			'https://api.gtfs-data.jp/v2/files?pref=11',
+		]);
 	});
 
 	it('一覧APIの失敗でthrowする', async () => {
 		const impl = async (): Promise<Response> => new Response('error', { status: 500 });
-		await expect(createGtfsDataJpSource('10').listFeeds(impl as typeof fetch)).rejects.toThrow(
+		await expect(createGtfsDataJpSource().listTargets(impl as typeof fetch)).rejects.toThrow(
 			'feed list fetch failed',
 		);
 	});
 
 	it('route URLがnullならundefinedになる', async () => {
-		const feeds = await createGtfsDataJpSource('10').listFeeds(
-			fetcherFor([entry({ file_stop_url: null, file_route_url: null })]),
+		const calls: string[] = [];
+		const targets = await createGtfsDataJpSource().listTargets(
+			fetcherFor([entry({ file_stop_url: null, file_route_url: null })], calls),
 		);
-		expect(feeds[0].routesGeojsonUrl).toBeUndefined();
+		expect(targets[0].routesGeojsonUrl).toBeUndefined();
 	});
 });

@@ -31,11 +31,16 @@ function toBucketLike(bucket: R2Bucket): BucketLike {
 
 export default {
 	async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+		const prefIds = env.GTFS_PREF_ID.split(',')
+			.map((v) => v.trim())
+			.filter(Boolean)
+			.map((v) => Number(v))
+			.filter((id) => Number.isInteger(id) && id > 0);
 		ctx.waitUntil(
 			runPipeline({
 				bucket: toBucketLike(env.DATA_BUCKET),
 				fetcher: fetch,
-				sources: [createGtfsDataJpSource(env.GTFS_PREF_ID), createOdptSource()],
+				sources: [createGtfsDataJpSource(prefIds.length === 0 ? {} : { prefIds }), createOdptSource()],
 			}),
 		);
 	},
