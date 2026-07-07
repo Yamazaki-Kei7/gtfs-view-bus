@@ -28,6 +28,7 @@
 	import Controls from '$lib/Controls.svelte';
 	import RouteLayers from '$lib/RouteLayers.svelte';
 	import StopTimetable from '$lib/StopTimetable.svelte';
+	import BasemapControl from '$lib/BasemapControl.svelte';
 	import {
 		buildRouteLines,
 		loadAll,
@@ -36,23 +37,30 @@
 		type RouteLineCollection,
 		type StopFeature,
 	} from '$lib/data';
+	import { BASEMAPS, type BasemapKey } from '$lib/basemaps';
 	import { MAX_TIME_SEC, nowJst, sim } from '$lib/sim.svelte';
 
-	// OSMベースマップは初期スタイルに含める(RasterTileSource コンポーネント経由だと
-	// タイルが読み込まれない事象があるため、スタイルオブジェクトで確実に描画する)
-	const BASE_STYLE: StyleSpecification = {
-		version: 8,
-		sources: {
-			osm: {
-				type: 'raster',
-				tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-				tileSize: 256,
-				maxzoom: 19,
-				attribution: '© OpenStreetMap contributors',
+	// 背景ラスタは初期スタイルに含める(RasterTileSource コンポーネント経由だと
+	// タイルが読み込まれない事象があるため、スタイルオブジェクトで確実に描画する)。
+	// 切替時はこのstyleを再代入せず、map への直接操作で base ソース/レイヤだけを差し替える(setBasemap参照)。
+	function baseStyle(key: BasemapKey): StyleSpecification {
+		const bm = BASEMAPS[key];
+		return {
+			version: 8,
+			sources: {
+				base: {
+					type: 'raster',
+					tiles: bm.tiles,
+					tileSize: 256,
+					maxzoom: bm.maxzoom,
+					attribution: bm.attribution,
+				},
 			},
-		},
-		layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
-	};
+			layers: [{ id: 'base', type: 'raster', source: 'base' }],
+		};
+	}
+	const INITIAL_BASEMAP: BasemapKey = 'positron';
+	const BASE_STYLE = baseStyle(INITIAL_BASEMAP);
 
 	// 路線色はデータ駆動式で指定する
 	const ROUTE_COLOR_EXPR: ExpressionSpecification = ['get', 'color'];
@@ -96,6 +104,27 @@
 	const INACTIVE_ROUTE_FILTER: ExpressionSpecification = ['==', ['get', 'active'], false];
 
 	let map = $state<MaplibreMap | undefined>();
+	let basemap = $state<BasemapKey>(INITIAL_BASEMAP);
+
+	// 背景ラスタを差し替える。style prop の再代入はレイヤ構成をリセットしうるため使わず、
+	// map への直接操作で base ソース/レイヤだけを入れ替える(プロトタイプと同じ手法)。
+	function setBasemap(key: BasemapKey) {
+		basemap = key;
+		if (!map) return;
+		const bm = BASEMAPS[key];
+		if (map.getLayer('base')) map.removeLayer('base');
+		if (map.getSource('base')) map.removeSource('base');
+		// 削除後のlayers[0]が現在の最下層(=baseを差し込むべき位置)になる
+		const beforeId = map.getStyle().layers[0]?.id;
+		map.addSource('base', {
+			type: 'raster',
+			tiles: bm.tiles,
+			tileSize: 256,
+			maxzoom: bm.maxzoom,
+			attribution: bm.attribution,
+		});
+		map.addLayer({ id: 'base', type: 'raster', source: 'base' }, beforeId);
+	}
 	let data = $state<LoadedData | null>(null);
 	let loadError = $state<string | null>(null);
 	// バス/路線の選択(排他)。判別共用体の単一状態にして排他性を表現そのものに担わせる。
@@ -383,6 +412,7 @@
 			}
 		}}
 	>
+		<BasemapControl active={basemap} onSelect={setBasemap} />
 		<NavigationControl showCompass={false} position="top-right" />
 		<GeolocateControl
 			position="top-right"
@@ -563,7 +593,11 @@
 	{#if data}
 		<RouteLayers routes={activeRoutes} bind:hidden {dateLabel} />
 	{/if}
-	<Controls busCount={buses.features.length} feedInfos={data?.index.feeds ?? []} />
+	<Controls
+		busCount={buses.features.length}
+		feedInfos={data?.index.feeds ?? []}
+		mapAttribution={BASEMAPS[basemap].attribution}
+	/>
 
 	<StopTimetable
 		open={!!selectedStop}
