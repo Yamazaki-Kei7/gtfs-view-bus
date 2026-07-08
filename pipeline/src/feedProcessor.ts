@@ -1,11 +1,13 @@
 import {
 	buildTimetableIndex,
+	centroidOf,
 	convertFeed,
 	shapesToGeojson,
 	stopRouteIds,
 	stopsToGeojson,
 	unzipFeed,
 } from 'gtfs-core';
+import { resolvePrefId } from 'gtfs-core/prefectureGeometry';
 import type { FeedStatus } from './jobState';
 import type { BucketLike } from './storage';
 import type { FeedTarget } from './sources/types';
@@ -17,6 +19,7 @@ interface FeedMeta {
 	/** 生成物の出力スキーマ版。無い(旧meta)場合は 0 とみなす */
 	schemaVersion?: number;
 	shapeSourceCounts?: Record<string, number>;
+	prefId?: number | null;
 }
 
 interface FeedArtifacts {
@@ -26,6 +29,7 @@ interface FeedArtifacts {
 	timetableJson: string;
 	metaJson: string;
 	shapeSourceCounts: Record<string, number>;
+	prefId: number | null;
 }
 
 export interface ProcessFeedTargetDeps {
@@ -79,17 +83,22 @@ async function buildFeedArtifacts(
 
 	const files = unzipFeed(zip);
 	const bundle = convertFeed(files, routesText ?? undefined);
+	const stops = stopsToGeojson(files, stopRouteIds(files));
+	const centroid = centroidOf(stops.features.map((f) => f.geometry.coordinates));
+	const prefId = target.prefId ?? (centroid ? resolvePrefId(centroid[0], centroid[1]) : null);
 	return {
 		bundleJson: JSON.stringify(bundle),
 		routesGeojson: routesText ?? JSON.stringify(shapesToGeojson(bundle)),
-		stopsGeojson: JSON.stringify(stopsToGeojson(files, stopRouteIds(files))),
+		stopsGeojson: JSON.stringify(stops),
 		timetableJson: JSON.stringify(buildTimetableIndex(files)),
 		metaJson: JSON.stringify({
 			versionId: target.versionId,
 			schemaVersion: OUTPUT_SCHEMA_VERSION,
 			shapeSourceCounts: bundle.shapeSourceCounts,
+			prefId,
 		}),
 		shapeSourceCounts: bundle.shapeSourceCounts,
+		prefId,
 	};
 }
 
@@ -112,7 +121,12 @@ export async function processFeedTarget({
 			(meta.versionId ?? meta.fileUid) === target.versionId &&
 			(meta.schemaVersion ?? 0) >= OUTPUT_SCHEMA_VERSION
 		) {
-			return { ...base, status: 'unchanged', shapeSourceCounts: meta.shapeSourceCounts };
+			return {
+				...base,
+				status: 'unchanged',
+				prefId: target.prefId ?? meta.prefId ?? null,
+				shapeSourceCounts: meta.shapeSourceCounts,
+			};
 		}
 
 		artifacts = await buildFeedArtifacts(fetcher, target);
@@ -120,6 +134,7 @@ export async function processFeedTarget({
 		return {
 			...base,
 			status: 'error',
+			prefId: target.prefId ?? null,
 			error: error instanceof Error ? error.message : String(error),
 		};
 	}
@@ -135,5 +150,10 @@ export async function processFeedTarget({
 
 	// meta.json はこのフィードの最後の書き込みにし、更新完了マーカーとして扱う。
 	await bucket.put(`feeds/${target.id}/meta.json`, artifacts.metaJson);
-	return { ...base, status: 'updated', shapeSourceCounts: artifacts.shapeSourceCounts };
+	return {
+		...base,
+		status: 'updated',
+		prefId: artifacts.prefId,
+		shapeSourceCounts: artifacts.shapeSourceCounts,
+	};
 }

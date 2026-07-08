@@ -8,6 +8,8 @@ export interface FeedStatus {
 	fromDate: string;
 	toDate: string;
 	source: SourceId;
+	/** JIS 都道府県コード(1〜47)。未解決は null */
+	prefId?: number | null;
 	status: 'updated' | 'unchanged' | 'error';
 	error?: string;
 	shapeSourceCounts?: Record<string, number>;

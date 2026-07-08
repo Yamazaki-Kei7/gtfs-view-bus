@@ -96,6 +96,50 @@ describe('processFeedTarget', () => {
 		expect(status.error).toBe('zip fetch failed: 404');
 	});
 
+	it('target.prefIdがあればstatusとmetaに反映する', async () => {
+		const bucket = fakeBucket();
+		const status = await processFeedTarget({
+			bucket,
+			fetcher: fetcher(),
+			target: target({ prefId: 13 }),
+		});
+		expect(status.prefId).toBe(13);
+		const meta = JSON.parse(
+			bucket.store.get('feeds/testorg~testfeed~2026-04-01/meta.json') ?? '{}',
+		) as { prefId?: number | null };
+		expect(meta.prefId).toBe(13);
+	});
+
+	it('target.prefId無しは停留所重心のresolvePrefId結果(数値 or null)になる', async () => {
+		const bucket = fakeBucket();
+		const status = await processFeedTarget({
+			bucket,
+			fetcher: fetcher(),
+			target: target({ prefId: undefined, source: 'odpt' }),
+		});
+		expect(status.prefId === null || typeof status.prefId === 'number').toBe(true);
+	});
+
+	it('unchanged時はtarget.prefId ?? meta.prefIdを使う', async () => {
+		const bucket = fakeBucket();
+		bucket.store.set(
+			'feeds/testorg~testfeed~2026-04-01/meta.json',
+			JSON.stringify({
+				versionId: 'uid-1',
+				schemaVersion: 4,
+				shapeSourceCounts: { shapes: 2, route: 0, straight: 0 },
+				prefId: 21,
+			}),
+		);
+		const status = await processFeedTarget({
+			bucket,
+			fetcher: fetcher(),
+			target: target({ prefId: undefined }),
+		});
+		expect(status.status).toBe('unchanged');
+		expect(status.prefId).toBe(21);
+	});
+
 	it('R2書き込み失敗はerror statusに丸めずthrowする', async () => {
 		const bucket = fakeBucket();
 		const failingBucket: BucketLike = {
