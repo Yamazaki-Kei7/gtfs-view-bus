@@ -26,6 +26,7 @@
 	const SOURCE_CREDITS: Record<string, string> = {
 		'gtfs-data.jp': 'GTFSデータリポジトリ(gtfs-data.jp)',
 		odpt: '公共交通オープンデータセンター(ODPT)',
+		hoda: '北海道オープンデータプラットフォーム(HODA)',
 	};
 	// source未設定の旧feeds.jsonはgtfs-data.jp由来として扱う
 	const credits = $derived(
@@ -84,7 +85,7 @@
 			>{timeLabel}</span
 		>
 		<span class="ml-auto text-sm text-mi-slate-600"
-			>運行中: <span class="font-bold text-mi-ember-500">{busCount}</span>台</span
+			>運行中: <span class="font-bold text-mi-ember-500">{busCount}</span>件</span
 		>
 	</div>
 	<div class="flex flex-col gap-0.5">

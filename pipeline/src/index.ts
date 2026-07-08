@@ -4,6 +4,7 @@ import { processFeedJobMessage } from './consumer';
 import { createFeedJob } from './jobProducer';
 import type { FeedJobMessage } from './jobState';
 import { toBucketLike } from './storage';
+import { createCkanPackageSource } from './sources/ckanPackage';
 import { createGtfsDataJpSource } from './sources/gtfsDataJp';
 import { createOdptSource, withOdptConsumerKey } from './sources/odpt';
 
@@ -27,6 +28,13 @@ export default {
 				sources: [
 					createGtfsDataJpSource(),
 					createOdptSource(undefined, { includeKeyRequired: Boolean(env.ODPT_CONSUMER_KEY) }),
+					createCkanPackageSource({
+						sourceId: 'hoda',
+						baseUrl: 'https://ckan.hoda.jp',
+						packageId: 'gtfs-data',
+						prefId: 1,
+						excludedNamePatterns: [/観光データ/],
+					}),
 				],
 				now: () => new Date(),
 				randomBytes,
