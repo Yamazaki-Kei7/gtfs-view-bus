@@ -6,6 +6,7 @@ import type { FeedJobMessage } from './jobState';
 import { toBucketLike } from './storage';
 import { createGtfsDataJpSource } from './sources/gtfsDataJp';
 import { createOdptSource, withOdptConsumerKey } from './sources/odpt';
+export { FeedProcessorContainer } from './container';
 
 function randomBytes(): Uint8Array {
 	const bytes = new Uint8Array(3);
