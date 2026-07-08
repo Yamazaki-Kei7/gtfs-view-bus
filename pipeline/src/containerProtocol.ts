@@ -64,7 +64,7 @@ export function parseFeedStatusResponse(text: string): ProcessFeedResponse {
 	if (parsed.error !== undefined && typeof parsed.error !== 'string') {
 		throw new Error('container status response malformed: error');
 	}
-	return {
+	const status: ProcessFeedResponse = {
 		id: parsed.id,
 		name: parsed.name,
 		orgName: parsed.orgName,
@@ -72,9 +72,17 @@ export function parseFeedStatusResponse(text: string): ProcessFeedResponse {
 		fromDate: parsed.fromDate,
 		toDate: parsed.toDate,
 		source: parsed.source,
-		prefId: parsed.prefId,
 		status: parsed.status,
-		error: parsed.error,
-		shapeSourceCounts: shapeSourceCounts(parsed),
 	};
+	if (parsed.prefId !== undefined) {
+		status.prefId = parsed.prefId;
+	}
+	if (parsed.error !== undefined) {
+		status.error = parsed.error;
+	}
+	const counts = shapeSourceCounts(parsed);
+	if (counts !== undefined) {
+		status.shapeSourceCounts = counts;
+	}
+	return status;
 }

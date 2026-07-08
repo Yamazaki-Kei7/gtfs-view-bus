@@ -31,7 +31,7 @@ describe('containerProtocol', () => {
 				shapeSourceCounts: { shapes: 1, route: 0, straight: 0 },
 			}),
 		);
-		expect(status).toEqual({
+		expect(status).toStrictEqual({
 			id: 'feed-1',
 			name: 'フィード1',
 			orgName: '事業者',
@@ -43,6 +43,34 @@ describe('containerProtocol', () => {
 			status: 'updated',
 			shapeSourceCounts: { shapes: 1, route: 0, straight: 0 },
 		});
+	});
+
+	it('省略可能項目が無い場合、対象キーを持たず返却する', () => {
+		const status = parseFeedStatusResponse(
+			JSON.stringify({
+				id: 'feed-1',
+				name: 'フィード1',
+				orgName: '事業者',
+				license: null,
+				fromDate: '2026-04-01',
+				toDate: '2027-03-31',
+				source: 'gtfs-data.jp',
+				status: 'unchanged',
+			}),
+		);
+		expect(status).toStrictEqual({
+			id: 'feed-1',
+			name: 'フィード1',
+			orgName: '事業者',
+			license: null,
+			fromDate: '2026-04-01',
+			toDate: '2027-03-31',
+			source: 'gtfs-data.jp',
+			status: 'unchanged',
+		});
+		expect(Object.prototype.hasOwnProperty.call(status, 'prefId')).toBe(false);
+		expect(Object.prototype.hasOwnProperty.call(status, 'error')).toBe(false);
+		expect(Object.prototype.hasOwnProperty.call(status, 'shapeSourceCounts')).toBe(false);
 	});
 
 	it('不正なstatus値はrejectする', () => {
