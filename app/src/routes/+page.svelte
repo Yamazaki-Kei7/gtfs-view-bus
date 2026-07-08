@@ -16,9 +16,11 @@
 		Map as MaplibreMap,
 		StyleSpecification,
 	} from 'maplibre-gl';
+	import { LngLatBounds } from 'maplibre-gl';
 	import {
 		buildStopTimetable,
 		busFeatureCollection,
+		prefectureById,
 		routeCatalog,
 		type BusFeature,
 		type GeneratedFeatureCollection,
@@ -29,10 +31,18 @@
 	import RouteLayers from '$lib/RouteLayers.svelte';
 	import StopTimetable from '$lib/StopTimetable.svelte';
 	import BasemapControl from '$lib/BasemapControl.svelte';
+	import PrefecturePicker from '$lib/PrefecturePicker.svelte';
+	import PrefectureHeader from '$lib/PrefectureHeader.svelte';
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import {
 		buildRouteLines,
-		loadAll,
+		loadIndex,
+		loadPrefecture,
+		loadAllFeeds,
+		prefectureCounts,
 		loadTimetable,
+		type FeedIndex,
 		type LoadedData,
 		type RouteLineCollection,
 		type StopFeature,
@@ -127,6 +137,19 @@
 	}
 	let data = $state<LoadedData | null>(null);
 	let loadError = $state<string | null>(null);
+	let index = $state<FeedIndex | null>(null);
+	let prefLoading = $state(false);
+	// prefId が全て null(旧feeds.json / 未投入)なら従来の全量表示にフォールバックする
+	const hasPrefData = $derived(!!index && index.feeds.some((f) => f.prefId != null));
+	const counts = $derived(index ? prefectureCounts(index) : new Map<number, number>());
+	// 選択中の都道府県は URL クエリ ?pref を単一情報源にする
+	const selectedPref = $derived.by(() => {
+		const raw = page.url.searchParams.get('pref');
+		const n = raw ? Number(raw) : NaN;
+		return Number.isInteger(n) && (counts.get(n) ?? 0) > 0 ? n : null;
+	});
+	// 未選択かつ prefId データありのときだけコロプレスピッカーを表示する
+	const showPicker = $derived(!!index && hasPrefData && selectedPref === null);
 	// バス/路線の選択(排他)。判別共用体の単一状態にして排他性を表現そのものに担わせる。
 	// bus の key は `${feedId}|${tripId}`(trip_id はフィード内でのみ一意)、route の key は `${feedId}|${routeId}`
 	type Selection =
@@ -154,11 +177,64 @@
 		sim.timeSec = n.timeSec;
 	});
 
+	// インデックス(feeds.json)を初回に取得する
 	$effect(() => {
-		loadAll()
-			.then((d) => (data = d))
+		loadIndex()
+			.then((idx) => (index = idx))
 			.catch((e: Error) => (loadError = e.message));
 	});
+
+	// 選択県(または prefId 無しなら全量)に応じてフィードデータをロードし直す
+	$effect(() => {
+		const idx = index;
+		if (!idx) return;
+		// prefId 未投入 → 従来どおり全量表示にフォールバック
+		if (!hasPrefData) {
+			prefLoading = true;
+			loadAllFeeds(idx)
+				.then((d) => (data = d))
+				.catch((e: Error) => (loadError = e.message))
+				.finally(() => (prefLoading = false));
+			return;
+		}
+		const pref = selectedPref;
+		if (pref === null) {
+			// 未選択: ピッカー表示。前県の描画・状態をクリアする
+			data = null;
+			hidden = {};
+			selected = null;
+			selectedStop = null;
+			timetableByFeed = {};
+			return;
+		}
+		prefLoading = true;
+		loadPrefecture(pref, idx)
+			.then((d) => {
+				data = d;
+				fitToStops(d);
+			})
+			.catch((e: Error) => (loadError = e.message))
+			.finally(() => (prefLoading = false));
+	});
+
+	// ロード済み県の停留所範囲へ地図を寄せる(県ポリゴンbboxは離島で巨大になるため使わない)
+	function fitToStops(d: LoadedData) {
+		if (!map || d.stops.features.length === 0) return;
+		const b = new LngLatBounds();
+		for (const s of d.stops.features) b.extend(s.geometry.coordinates);
+		map.fitBounds(b, {
+			padding: { top: 90, right: 60, bottom: 150, left: 60 },
+			maxZoom: 13,
+			duration: 1200,
+		});
+	}
+
+	function selectPref(prefId: number) {
+		goto(`?pref=${prefId}`, { keepFocus: true, noScroll: true });
+	}
+	function clearPref() {
+		goto('?', { keepFocus: true, noScroll: true });
+	}
 
 	const dateYMD = $derived(sim.date.replaceAll('-', ''));
 
@@ -400,8 +476,8 @@
 		bind:map
 		class="h-full w-full"
 		style={BASE_STYLE}
-		center={[139.2, 36.35]}
-		zoom={10}
+		center={[137.5, 38]}
+		zoom={4}
 		attributionControl={false}
 		{cursor}
 		onclick={(ev) => {
@@ -585,7 +661,7 @@
 			{loadError}
 		</div>
 	{/if}
-	{#if data && buses.features.length === 0}
+	{#if data && !showPicker && buses.features.length === 0}
 		<div
 			class="absolute top-4 left-1/2 z-10 -translate-x-1/2 rounded-[10px] bg-mi-teal-900/90 px-4 py-2 text-sm text-white shadow-lg"
 		>
@@ -593,21 +669,41 @@
 		</div>
 	{/if}
 
-	{#if data}
-		<RouteLayers routes={activeRoutes} bind:hidden {dateLabel} />
+	{#if showPicker}
+		<PrefecturePicker {map} {counts} onSelect={selectPref} />
 	{/if}
-	<Controls
-		busCount={buses.features.length}
-		feedInfos={data?.index.feeds ?? []}
-		mapAttribution={BASEMAPS[basemap].attribution}
-	/>
 
-	<StopTimetable
-		open={!!selectedStop}
-		stopName={selectedStop?.name ?? ''}
-		{dateLabel}
-		{timeLabel}
-		timetable={stopTimetable}
-		onClose={() => (selectedStop = null)}
-	/>
+	{#if selectedPref !== null && index}
+		<PrefectureHeader prefName={prefectureById(selectedPref)?.ja ?? ''} onChange={clearPref} />
+	{/if}
+
+	{#if prefLoading}
+		<div
+			class="absolute top-1/2 left-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2.5 rounded-xl border border-mi-slate-200 bg-white/95 px-4 py-3 text-sm text-mi-slate-600 shadow-[0_8px_22px_rgba(7,48,61,0.16)]"
+		>
+			<span
+				class="h-4 w-4 animate-spin rounded-full border-[2.5px] border-mi-slate-200 border-t-mi-teal-600"
+			></span>
+			全国の路線データを読み込み中…
+		</div>
+	{/if}
+
+	{#if data && !showPicker}
+		<RouteLayers routes={activeRoutes} bind:hidden {dateLabel} />
+		<Controls
+			busCount={buses.features.length}
+			feedInfos={index && selectedPref !== null
+				? index.feeds.filter((f) => f.prefId === selectedPref)
+				: (index?.feeds ?? [])}
+			mapAttribution={BASEMAPS[basemap].attribution}
+		/>
+		<StopTimetable
+			open={!!selectedStop}
+			stopName={selectedStop?.name ?? ''}
+			{dateLabel}
+			{timeLabel}
+			timetable={stopTimetable}
+			onClose={() => (selectedStop = null)}
+		/>
+	{/if}
 </div>
