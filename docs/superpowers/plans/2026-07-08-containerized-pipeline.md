@@ -19,7 +19,7 @@
 - 初期運用は安定優先とし、Container `max_instances` とQueue `max_concurrency` を小さめに揃える。
 - TypeScriptの `class` は原則避けるが、Cloudflare Containersは `Container` 継承クラスが必要なため、その部分だけ例外とする。
 - Queue consumerのDuration limitは15分である。Container同期処理は1フィード15分以内に収める。
-- ODPTのキー付き配布URLをContainerで取得するため、`ODPT_CONSUMER_KEY` をContainer runtime envへ渡す。キーはmanifest、Queue message、R2には保存しない。
+- ODPTのキー付き配布URLをContainerで取得するため、Worker consumerがContainerへの内部HTTPリクエスト本文に `ODPT_CONSUMER_KEY` を含める。キーはmanifest、Queue message、R2には保存しない。
 - TypeScriptで `any` / `unknown` / 不要な `class` を使わない。
 - コードコメント、ドキュメント、コミットメッセージ本文は日本語で書く。
 - パッケージマネージャはpnpm。pipelineの検証は `pnpm --filter pipeline test`、`pnpm --filter pipeline check`、`pnpm --filter pipeline cf:types`、`pnpm --filter pipeline cf:check` を使う。
@@ -176,7 +176,9 @@ import type { SourceId } from './sources/types';
 export const CONTAINER_PROCESS_PATH = '/process-feed';
 export const CONTAINER_PROCESS_TIMEOUT_MS = 14 * 60 * 1000;
 
-export interface ProcessFeedRequest extends FeedJobMessage {}
+export interface ProcessFeedRequest extends FeedJobMessage {
+	odptConsumerKey?: string;
+}
 
 export type ProcessFeedResponse = FeedStatus;
 
@@ -616,7 +618,7 @@ git commit -m "feat(pipeline): Container内R2 HTTP bucketを追加"
   - `withOdptConsumerKey(fetcher, consumerKey)` from `pipeline/src/sources/odpt.ts`
   - `createR2HttpBucket(options): BucketLike`
 - Produces:
-  - `ContainerAppEnv { R2_BASE_URL: string; ODPT_CONSUMER_KEY?: string }`
+  - `ContainerAppEnv { R2_BASE_URL: string }`
   - `handleContainerRequest(request: Request, env: ContainerAppEnv, fetcher?: typeof fetch): Promise<Response>`
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -671,6 +673,7 @@ function processRequest(): Request {
 				routesGeojsonUrl: 'https://example.com/routes.geojson',
 				prefId: 10,
 			},
+			odptConsumerKey: 'SECRET',
 		}),
 	});
 }
@@ -735,7 +738,6 @@ import { createR2HttpBucket } from './r2HttpBucket';
 
 export interface ContainerAppEnv {
 	R2_BASE_URL: string;
-	ODPT_CONSUMER_KEY?: string;
 }
 
 function jsonResponse(value: object, status = 200): Response {
@@ -768,7 +770,7 @@ export async function handleContainerRequest(
 	const bucket = createR2HttpBucket({ baseUrl: env.R2_BASE_URL, fetcher });
 	const status = await processFeedTarget({
 		bucket,
-		fetcher: withOdptConsumerKey(fetcher, env.ODPT_CONSUMER_KEY),
+		fetcher: withOdptConsumerKey(fetcher, body.odptConsumerKey),
 		target: body.target,
 	});
 	return jsonResponse(status);
@@ -838,7 +840,6 @@ const PORT = Number(process.env.PORT ?? '8080');
 function env(): ContainerAppEnv {
 	return {
 		R2_BASE_URL: process.env.R2_BASE_URL ?? 'http://r2.internal',
-		ODPT_CONSUMER_KEY: process.env.ODPT_CONSUMER_KEY,
 	};
 }
 
@@ -1125,13 +1126,16 @@ describe('dispatchFeedToContainer', () => {
 				requests,
 			),
 			message: message(),
+			odptConsumerKey: 'SECRET',
 			timeoutMs: 1000,
 		});
 
 		expect(names).toEqual(['feed-job-1-feed-1']);
 		expect(requests[0].method).toBe('POST');
 		expect(new URL(requests[0].url).pathname).toBe('/process-feed');
-		expect(await requests[0].text()).toBe(JSON.stringify(message()));
+		expect(await requests[0].text()).toBe(
+			JSON.stringify({ ...message(), odptConsumerKey: 'SECRET' }),
+		);
 		expect(status.status).toBe('updated');
 	});
 
@@ -1174,6 +1178,7 @@ import {
 	CONTAINER_PROCESS_TIMEOUT_MS,
 	containerInstanceName,
 	parseFeedStatusResponse,
+	type ProcessFeedRequest,
 } from './containerProtocol';
 import type { FeedJobMessage, FeedStatus } from './jobState';
 
@@ -1188,6 +1193,7 @@ export interface ContainerResolver {
 export interface DispatchFeedToContainerDeps {
 	resolver: ContainerResolver;
 	message: FeedJobMessage;
+	odptConsumerKey?: string;
 	timeoutMs?: number;
 }
 
@@ -1202,17 +1208,19 @@ export function createContainerResolver(binding: DurableObjectNamespace): Contai
 export async function dispatchFeedToContainer({
 	resolver,
 	message,
+	odptConsumerKey,
 	timeoutMs = CONTAINER_PROCESS_TIMEOUT_MS,
 }: DispatchFeedToContainerDeps): Promise<FeedStatus> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), timeoutMs);
 	try {
 		const container = resolver.get(containerInstanceName(message.jobId, message.target.id));
+		const body: ProcessFeedRequest = { ...message, odptConsumerKey };
 		const response = await container.fetch(
 			new Request(`http://container${CONTAINER_PROCESS_PATH}`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json; charset=utf-8' },
-				body: JSON.stringify(message),
+				body: JSON.stringify(body),
 				signal: controller.signal,
 			}),
 		);
@@ -1252,7 +1260,7 @@ git commit -m "feat(pipeline): QueueからContainerへ処理を委譲するdispa
 
 **Interfaces:**
 - Consumes:
-  - `dispatchFeedToContainer({ resolver, message }): Promise<FeedStatus>`
+  - `dispatchFeedToContainer({ resolver, message, odptConsumerKey }): Promise<FeedStatus>`
   - `createContainerResolver(env.FEED_PROCESSOR_CONTAINER)`
 - Produces:
   - `FeedJobProcessor { process(message: FeedJobMessage): Promise<FeedStatus> }`
@@ -1436,7 +1444,12 @@ async queue(batch: MessageBatch<FeedJobMessage>, env: Env): Promise<void> {
 			await processFeedJobMessage({
 				bucket,
 				processor: {
-					process: async (body) => dispatchFeedToContainer({ resolver, message: body }),
+					process: async (body) =>
+						dispatchFeedToContainer({
+							resolver,
+							message: body,
+							odptConsumerKey: env.ODPT_CONSUMER_KEY,
+						}),
 				},
 				message: message.body,
 				now: () => new Date(),
@@ -1568,7 +1581,7 @@ git commit -m "docs(pipeline): Containers変換の運用手順を追加"
   - 安定優先の並列度: Task 5
   - `Container` 継承classの例外: Task 5
   - Queue consumer 15分制限: Task 1, Task 6
-  - ODPTキーをContainer runtime envへ渡す: Task 4, Task 5
+  - ODPTキーをContainer内部HTTPリクエスト本文だけで渡す: Task 4, Task 6, Task 7
 - Placeholder scan: 禁止語句や未決定事項を含めない。
 - Type consistency:
   - `ProcessFeedRequest` は `FeedJobMessage` を拡張する。

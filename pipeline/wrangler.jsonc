@@ -3,9 +3,32 @@
 	"name": "gtfs-view-bus-pipeline",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-07-07",
+	"containers": [
+		{
+			"class_name": "FeedProcessorContainer",
+			"image": "./Dockerfile",
+			"image_build_context": "..",
+			"max_instances": 5,
+			"instance_type": "standard-1",
+		},
+	],
 	// 毎月末日 20:00 UTC = 翌月1日 05:00 JST。L記法が拒否されたら "0 0 1 * *" に変更
 	"triggers": { "crons": ["0 20 L * *"] },
 	"r2_buckets": [{ "binding": "DATA_BUCKET", "bucket_name": "gtfs-view-bus-data" }],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "FEED_PROCESSOR_CONTAINER",
+				"class_name": "FeedProcessorContainer",
+			},
+		],
+	},
+	"migrations": [
+		{
+			"tag": "v1-feed-processor-container",
+			"new_sqlite_classes": ["FeedProcessorContainer"],
+		},
+	],
 	"queues": {
 		"producers": [{ "binding": "FEED_QUEUE", "queue": "gtfs-view-bus-feed-jobs" }],
 		"consumers": [
@@ -17,7 +40,7 @@
 				"max_batch_timeout": 5,
 				"max_retries": 3,
 				"dead_letter_queue": "gtfs-view-bus-feed-jobs-dlq",
-				"max_concurrency": 20,
+				"max_concurrency": 5,
 				"retry_delay": 30,
 			},
 		],

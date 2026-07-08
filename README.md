@@ -6,7 +6,7 @@
 - 実装計画: `docs/superpowers/plans/2026-07-05-gtfs-bus-position-webgis.md`
 - 全国パイプライン設計: `docs/superpowers/specs/2026-07-07-nationwide-pipeline-design.md`
 - 全国パイプライン計画: `docs/superpowers/plans/2026-07-07-nationwide-pipeline.md`
-- 構成: `pipeline/`(月次Cron + Queues変換Worker) → R2 → `app/`(SvelteKit on Workers) → MapLibre
+- 構成: `pipeline/`(月次Cron + Queues + Containers + R2) → `app/`(SvelteKit on Workers) → MapLibre
 - 共有ロジック: `packages/gtfs-core/`(CSVパース・shape射影・キーフレーム補間・カレンダー判定)
 - IaC: `infra/`(Terraform, R2バケット) + 各 `wrangler.jsonc`
 
@@ -43,13 +43,13 @@ just を使わない場合の生コマンドは `justfile` を参照。
 
 ### Pipeline
 
-`pipeline/` は Cloudflare Workers Cron + Queues + R2 で GTFS を月次変換する。公開形式は `feeds.json` と `feeds/<feedId>/...` を維持するため、アプリ側の `/data/*` 読み取り契約は変えない。
+`pipeline/` は Cloudflare Workers Cron + Queues + Containers + R2 で GTFS を月次変換する。Cron は対象フィード一覧を作って Queue へ投入し、Queue consumer は Container へ 1 フィード単位で変換を委譲する。Container は R2 outbound handler 経由で成果物を書き込み、全 status が揃った時だけ `feeds.json` を差し替える。公開形式は `feeds.json` と `feeds/<feedId>/...` を維持するため、アプリ側の `/data/*` 読み取り契約は変えない。
 
 詳しい検証手順と ODPT マニフェスト更新手順は `pipeline/README.md` を参照。
 
 ### Cronを手動実行する
 
-パイプラインWorkerは月次Cronでフィード処理ジョブを Queues へ投入し、Queue consumer がR2へ `feeds.json` と `feeds/*` を生成する。
+パイプラインWorkerは月次Cronでフィード処理ジョブを Queues へ投入し、Queue consumer が Container へ変換を委譲する。Container は R2 へ `feeds/*` を書き込み、全 status が揃った時だけ Worker が `feeds.json` を差し替える。
 WorkerをデプロイしてもCronは即時実行されないため、データソース追加後や初回投入時は手動実行が必要。
 
 #### ローカルR2を更新する
