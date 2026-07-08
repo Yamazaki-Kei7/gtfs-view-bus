@@ -16,7 +16,6 @@
 		Map as MaplibreMap,
 		StyleSpecification,
 	} from 'maplibre-gl';
-	import { LngLatBounds } from 'maplibre-gl';
 	import {
 		buildStopTimetable,
 		busFeatureCollection,
@@ -218,16 +217,28 @@
 			.finally(() => (prefLoading = false));
 	});
 
-	// ロード済み県の停留所範囲へ地図を寄せる(県ポリゴンbboxは離島で巨大になるため使わない)
+	// ロード済み県の停留所範囲へ地図を寄せる(県ポリゴンbboxは離島で巨大になるため使わない)。
+	// maplibre-gl の値 import は SSR(CommonJS)で壊れるため、bbox は配列で組み立てて fitBounds に渡す。
 	function fitToStops(d: LoadedData) {
 		if (!map || d.stops.features.length === 0) return;
-		const b = new LngLatBounds();
-		for (const s of d.stops.features) b.extend(s.geometry.coordinates);
-		map.fitBounds(b, {
-			padding: { top: 90, right: 60, bottom: 150, left: 60 },
-			maxZoom: 13,
-			duration: 1200,
-		});
+		let minLng = Infinity;
+		let minLat = Infinity;
+		let maxLng = -Infinity;
+		let maxLat = -Infinity;
+		for (const s of d.stops.features) {
+			const [lng, lat] = s.geometry.coordinates;
+			if (lng < minLng) minLng = lng;
+			if (lat < minLat) minLat = lat;
+			if (lng > maxLng) maxLng = lng;
+			if (lat > maxLat) maxLat = lat;
+		}
+		map.fitBounds(
+			[
+				[minLng, minLat],
+				[maxLng, maxLat],
+			],
+			{ padding: { top: 90, right: 60, bottom: 150, left: 60 }, maxZoom: 13, duration: 1200 },
+		);
 	}
 
 	function selectPref(prefId: number) {
