@@ -41,14 +41,14 @@
 
 consumer(`processFeedTarget`)での `prefId` 決定:
 
-- **更新時(artifacts 生成時)**: `prefId = target.prefId ?? resolvePrefId(重心(生成した stops))`。`meta.json` に保存する。
-- **unchanged 時**: `prefId = target.prefId ?? meta.prefId`。
+- **更新時(artifacts 生成時)**: `prefId = target.prefId ?? resolvePrefId(重心(生成した stops))`。`meta.json` に保存する(値が null でもキーは必ず書く)。
+- **unchanged 時**: `prefId = target.prefId ?? meta.prefId`。ただし `(target.prefId ?? meta.prefId) === undefined`(= prefId 導入前の旧 meta で権威値も無い)の場合は unchanged スキップせず**一度再処理**して重心解決する。スキップすると prefId=null のままどの県にも属さず不可視になるため(実装時に既存の群馬ODPT 8フィードで顕在化)。
 - **error 時**: `target.prefId`(不明なら null)。
 
 この方針が**スキーマ版の引き上げなしで成立する**根拠:
 
 - gtfs-data.jp は毎回 `target.prefId`(権威値)を持つため、updated / unchanged いずれも再処理なしで prefId が定まる。
-- ODPT は `versionId` が空文字で、`feedProcessor` の unchanged 判定が空 versionId を除外する(`feedProcessor.ts:107`)ため**常に再処理**される。したがって重心は毎回手元にあり、centroid 判定が常に走る。
+- ODPT は versionId 解決(302 Location)が成功すれば unchanged になりうるが、上記の「旧 meta かつ権威値なしは再処理」条件により一度だけ重心解決が走り、以後は meta 読み戻しで unchanged に戻る。重心が null に解決されたフィードは meta に `prefId: null` が明示保存されるため毎回再処理にはならない。
 
 `prefId` を `meta.json`・`FeedStatus`(`jobState.ts`)に追加し、`statusBase` から updated/unchanged/error の全戻り値に流す。finalize の `toPublicStatus` に `prefId` を含め、`feeds.json` の各エントリへ出力する。`OUTPUT_SCHEMA_VERSION` は据え置き(bundle/stops/timetable の生成物フォーマットは不変で、prefId は meta と feeds.json だけの追加のため、全 zip 再取得を伴う版上げは目的に対し過剰)。
 

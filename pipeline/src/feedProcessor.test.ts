@@ -42,6 +42,8 @@ function target(overrides: Partial<FeedTarget> = {}): FeedTarget {
 		versionId: 'uid-1',
 		zipUrl: 'https://example.com/feed.zip',
 		routesGeojsonUrl: 'https://example.com/routes.geojson',
+		// gtfs-data.jp は一覧APIの feed_pref_id が常に付く(権威値)
+		prefId: 10,
 		...overrides,
 	};
 }
@@ -118,6 +120,52 @@ describe('processFeedTarget', () => {
 			target: target({ prefId: undefined, source: 'odpt' }),
 		});
 		expect(status.prefId === null || typeof status.prefId === 'number').toBe(true);
+	});
+
+	it('prefId未計算の旧metaは、権威値が無ければversionId一致でも再処理して重心解決する', async () => {
+		// 既存ODPTフィード(schemaVersion 4時代のmetaにprefIdキーが無い)の移行。
+		// unchangedスキップするとprefId=nullのままどの県にも属さず不可視になる
+		const bucket = fakeBucket();
+		bucket.store.set(
+			'feeds/testorg~testfeed~2026-04-01/meta.json',
+			JSON.stringify({
+				versionId: 'uid-1',
+				schemaVersion: 4,
+				shapeSourceCounts: { shapes: 2, route: 0, straight: 0 },
+			}),
+		);
+		const status = await processFeedTarget({
+			bucket,
+			fetcher: fetcher(),
+			target: target({ prefId: null, source: 'odpt' }),
+		});
+		expect(status.status).toBe('updated');
+		const meta = JSON.parse(
+			bucket.store.get('feeds/testorg~testfeed~2026-04-01/meta.json') ?? '{}',
+		) as { prefId?: number | null };
+		// 再処理後のmetaにはprefIdキーが必ず入る(値は重心解決の結果でnullもありうる)
+		expect('prefId' in meta).toBe(true);
+	});
+
+	it('重心解決済みnull(meta.prefId===null)はunchangedのままにする(毎回再処理しない)', async () => {
+		const bucket = fakeBucket();
+		bucket.store.set(
+			'feeds/testorg~testfeed~2026-04-01/meta.json',
+			JSON.stringify({
+				versionId: 'uid-1',
+				schemaVersion: 4,
+				shapeSourceCounts: { shapes: 2, route: 0, straight: 0 },
+				prefId: null,
+			}),
+		);
+		const status = await processFeedTarget({
+			bucket,
+			fetcher: fetcher(),
+			target: target({ prefId: null, source: 'odpt' }),
+		});
+		expect(status.status).toBe('unchanged');
+		expect(status.prefId).toBeNull();
+		expect(bucket.writes).toHaveLength(0);
 	});
 
 	it('unchanged時はtarget.prefId ?? meta.prefIdを使う', async () => {

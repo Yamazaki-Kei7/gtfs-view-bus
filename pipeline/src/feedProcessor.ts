@@ -114,12 +114,16 @@ export async function processFeedTarget({
 	try {
 		const meta = metaText ? (JSON.parse(metaText) as FeedMeta) : null;
 		// versionId '' は版数解決に失敗したエラー記述子(ODPT)なので unchanged 扱いにしない。
-		// versionId が一致していても出力スキーマ版が古ければ再処理する(既存フィードの移行)
+		// versionId が一致していても出力スキーマ版が古ければ再処理する(既存フィードの移行)。
+		// prefId が権威値(target)でも計算済み(meta、null含む)でも得られない場合は、
+		// prefId導入前の旧metaなので一度再処理して停留所重心から解決する(unchangedスキップ
+		// するとどの県にも属さず不可視になる)。再処理後のmetaにはprefIdキーが必ず入る
 		if (
 			meta &&
 			target.versionId !== '' &&
 			(meta.versionId ?? meta.fileUid) === target.versionId &&
-			(meta.schemaVersion ?? 0) >= OUTPUT_SCHEMA_VERSION
+			(meta.schemaVersion ?? 0) >= OUTPUT_SCHEMA_VERSION &&
+			(target.prefId ?? meta.prefId) !== undefined
 		) {
 			return {
 				...base,
