@@ -25,6 +25,11 @@
 	const NONE = '#e7edf0';
 	const HOVER = '#3a93b3';
 	const SRC = 'pref-choropleth';
+	// 参照デザインと同じ日本全体の表示範囲(ピッカー表示時に fitBounds する)
+	const JAPAN_BBOX: [[number, number], [number, number]] = [
+		[126, 26],
+		[146, 46],
+	];
 	const registeredIds = $derived([...counts.keys()].filter((id) => (counts.get(id) ?? 0) > 0));
 	const registeredCount = $derived(registeredIds.length);
 
@@ -32,6 +37,8 @@
 	let tip = $state<{ x: number; y: number; text: string } | null>(null);
 	let hoverId: number | null = null;
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
+	// ピッカー表示ごとに1回だけ日本全体へ寄せる(counts変化でeffectが再実行されても再フィットしない)
+	let fitted = false;
 
 	function showToast(msg: string) {
 		toast = msg;
@@ -81,6 +88,12 @@
 		if (!m) return;
 		const ids = registeredIds;
 		let disposed = false;
+
+		// 参照デザインどおり日本全体を表示する(初回マウント・「変更」での再表示とも)
+		if (!fitted) {
+			fitted = true;
+			m.fitBounds(JAPAN_BBOX, { padding: 30, duration: 900 });
+		}
 
 		const add = (geo: GeoJSONData) => {
 			if (disposed || m.getSource(SRC)) return;
