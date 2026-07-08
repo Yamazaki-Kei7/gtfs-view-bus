@@ -6,3 +6,6 @@ dist
 pnpm-lock.yaml
 docs
 .playwright-mcp
+# 生成物(mapshaper 出力の都道府県ポリゴン)は整形対象外
+packages/gtfs-core/src/prefectures.geo.json
+app/static/japan-prefectures.geojson

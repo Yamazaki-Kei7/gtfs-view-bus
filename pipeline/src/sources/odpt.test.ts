@@ -15,7 +15,8 @@ const MANIFEST: OdptManifestFile = {
 			license: 'CC BY 4.0',
 			fromDate: '',
 			toDate: '',
-			zipUrl: 'https://api-public.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip?date=current',
+			zipUrl:
+				'https://api-public.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip?date=current',
 		},
 	],
 };
@@ -53,7 +54,8 @@ describe('createOdptSource', () => {
 			toDate: '',
 			source: 'odpt',
 			versionId: '/files-open/odpt/TakasakiCity/yosiibus-20260421.zip',
-			zipUrl: 'https://api-public.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip?date=current',
+			zipUrl:
+				'https://api-public.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip?date=current',
 			prefId: null,
 		});
 	});

@@ -6,8 +6,7 @@ interface PrefFeature {
 	type: 'Feature';
 	properties: { id: number };
 	geometry:
-		| { type: 'Polygon'; coordinates: Ring[] }
-		| { type: 'MultiPolygon'; coordinates: Ring[][] };
+		{ type: 'Polygon'; coordinates: Ring[] } | { type: 'MultiPolygon'; coordinates: Ring[][] };
 }
 export interface PrefectureFeatureCollection {
 	type: 'FeatureCollection';

@@ -173,7 +173,9 @@
 		></span>データ登録あり
 	</div>
 	<div class="flex items-center gap-2 text-[11.5px] text-mi-slate-500">
-		<span class="h-3 w-3 rounded-[3px] border-[1.5px] border-mi-slate-300" style="background:#e7edf0"
+		<span
+			class="h-3 w-3 rounded-[3px] border-[1.5px] border-mi-slate-300"
+			style="background:#e7edf0"
 		></span>データなし
 	</div>
 </div>
