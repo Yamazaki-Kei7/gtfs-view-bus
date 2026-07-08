@@ -4,6 +4,7 @@ export interface GtfsFileEntry {
 	organization_id: string;
 	organization_name: string;
 	feed_id: string;
+	feed_pref_id: number;
 	feed_name: string;
 	feed_license_id: string | null;
 	file_uid: string;
@@ -50,6 +51,7 @@ function toTarget(entry: GtfsFileEntry): FeedTarget {
 		versionId: entry.file_uid,
 		zipUrl: entry.file_url,
 		routesGeojsonUrl: entry.file_route_url ?? undefined,
+		prefId: entry.feed_pref_id,
 	};
 }
 

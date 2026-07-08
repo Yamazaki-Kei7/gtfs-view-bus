@@ -6,6 +6,7 @@ function entry(overrides: Partial<GtfsFileEntry>): GtfsFileEntry {
 		organization_id: 'testorg',
 		organization_name: 'テスト協議会',
 		feed_id: 'testfeed',
+		feed_pref_id: 10,
 		feed_name: 'テストバス',
 		feed_license_id: 'CC BY 4.0',
 		file_uid: 'uid-1',
@@ -48,6 +49,7 @@ describe('createGtfsDataJpSource', () => {
 			versionId: 'uid-1',
 			zipUrl: 'https://example.com/feed.zip',
 			routesGeojsonUrl: 'https://example.com/routes.geojson',
+			prefId: 10,
 		});
 	});
 
@@ -76,5 +78,13 @@ describe('createGtfsDataJpSource', () => {
 			fetcherFor([entry({ file_stop_url: null, file_route_url: null })], calls),
 		);
 		expect(targets[0].routesGeojsonUrl).toBeUndefined();
+	});
+
+	it('feed_pref_idをprefIdへ変換する', async () => {
+		const calls: string[] = [];
+		const targets = await createGtfsDataJpSource().listTargets(
+			fetcherFor([entry({ feed_pref_id: 13 })], calls),
+		);
+		expect(targets[0].prefId).toBe(13);
 	});
 });

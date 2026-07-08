@@ -18,6 +18,8 @@ export interface FeedTarget {
 	zipUrl: string;
 	/** ソースがルート形状のGeoJSONを別配布している場合のみ設定 */
 	routesGeojsonUrl?: string;
+	/** JIS 都道府県コード(1〜47)。未解決は null / 未設定。ソースが権威値を持つ場合に設定する */
+	prefId?: number | null;
 }
 
 export interface FeedSource {
