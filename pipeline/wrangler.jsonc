@@ -40,7 +40,7 @@
 				"max_batch_timeout": 5,
 				"max_retries": 3,
 				"dead_letter_queue": "gtfs-view-bus-feed-jobs-dlq",
-				"max_concurrency": 20,
+				"max_concurrency": 5,
 				"retry_delay": 30,
 			},
 		],
