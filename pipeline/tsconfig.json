@@ -9,5 +9,5 @@
 		"resolveJsonModule": true,
 		"types": ["@cloudflare/workers-types"]
 	},
-	"include": ["src", "scripts"]
+	"include": ["src", "scripts", "container-app/src"]
 }
