@@ -44,6 +44,7 @@ function entry(overrides: Partial<GtfsFileEntry>): GtfsFileEntry {
 		organization_id: 'testorg',
 		organization_name: 'テスト協議会',
 		feed_id: 'testfeed',
+		feed_pref_id: 10,
 		feed_name: 'テストバス',
 		feed_license_id: 'CC BY 4.0',
 		file_uid: 'uid-1',
