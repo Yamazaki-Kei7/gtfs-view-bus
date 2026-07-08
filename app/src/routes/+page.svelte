@@ -35,6 +35,7 @@
 	import PrefectureHeader from '$lib/PrefectureHeader.svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import {
 		buildRouteLines,
 		loadIndex,
@@ -230,10 +231,12 @@
 	}
 
 	function selectPref(prefId: number) {
-		goto(`?pref=${prefId}`, { keepFocus: true, noScroll: true });
+		// 現在ルート(/)のクエリのみ変更。resolve('/') 済みのベースにクエリを付与するため resolve 呼び出しの外に出る
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
+		goto(`${resolve('/')}?pref=${prefId}`, { keepFocus: true, noScroll: true });
 	}
 	function clearPref() {
-		goto('?', { keepFocus: true, noScroll: true });
+		goto(resolve('/'), { keepFocus: true, noScroll: true });
 	}
 
 	const dateYMD = $derived(sim.date.replaceAll('-', ''));

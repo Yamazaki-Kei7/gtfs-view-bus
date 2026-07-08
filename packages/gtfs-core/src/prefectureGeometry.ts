@@ -1,5 +1,4 @@
 import geojson from './prefectures.geo.json';
-import type { LngLat } from './types';
 
 type Ring = number[][];
 interface PrefFeature {
