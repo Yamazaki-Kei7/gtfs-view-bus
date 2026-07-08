@@ -11,12 +11,14 @@
 		"consumers": [
 			{
 				"queue": "gtfs-view-bus-feed-jobs",
-				"max_batch_size": 5,
-				"max_batch_timeout": 30,
+				// 外部zip取得のI/O待ちが支配的なため、バッチは小さく並列度を高くして
+				// 遅いフィードが他をブロックしないようにする
+				"max_batch_size": 3,
+				"max_batch_timeout": 10,
 				"max_retries": 3,
 				"dead_letter_queue": "gtfs-view-bus-feed-jobs-dlq",
-				"max_concurrency": 2,
-				"retry_delay": 120,
+				"max_concurrency": 20,
+				"retry_delay": 30,
 			},
 		],
 	},
