@@ -16,10 +16,10 @@
 				"max_retries": 3,
 				"dead_letter_queue": "gtfs-view-bus-feed-jobs-dlq",
 				"max_concurrency": 2,
-				"retry_delay": 120
-			}
-		]
+				"retry_delay": 120,
+			},
+		],
 	},
 	"limits": { "cpu_ms": 300000 },
-	"observability": { "enabled": true, "head_sampling_rate": 1 }
+	"observability": { "enabled": true, "head_sampling_rate": 1 },
 }

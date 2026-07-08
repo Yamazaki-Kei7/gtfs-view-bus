@@ -68,7 +68,9 @@ describe('createFeedJob', () => {
 		) as JobManifest;
 		expect(manifest.targets.map((t) => t.id)).toEqual(['a', 'b']);
 		expect(manifest.sources).toEqual({ 'gtfs-data.jp': 2, odpt: 0 });
-		const current = JSON.parse(bucket.store.get('pipeline/jobs/current.json') ?? '{}') as JobCurrent;
+		const current = JSON.parse(
+			bucket.store.get('pipeline/jobs/current.json') ?? '{}',
+		) as JobCurrent;
 		expect(current.status).toBe('queued');
 		expect(queue.batches).toHaveLength(1);
 		expect(queue.batches[0].map((m) => m.body.target.id)).toEqual(['a', 'b']);
@@ -107,7 +109,9 @@ describe('createFeedJob', () => {
 		});
 		expect(result.status).toBe('failed');
 		expect(bucket.store.has('pipeline/jobs/20260707T120000Z-040506/manifest.json')).toBe(false);
-		const current = JSON.parse(bucket.store.get('pipeline/jobs/current.json') ?? '{}') as JobCurrent;
+		const current = JSON.parse(
+			bucket.store.get('pipeline/jobs/current.json') ?? '{}',
+		) as JobCurrent;
 		expect(current.status).toBe('failed');
 		expect(current.error).toBe('source down');
 		expect(queue.batches).toHaveLength(0);

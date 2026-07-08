@@ -9,3 +9,6 @@ docs
 # 生成物(mapshaper 出力の都道府県ポリゴン)は整形対象外
 packages/gtfs-core/src/prefectures.geo.json
 app/static/japan-prefectures.geojson
+# 生成物(wrangler types)とテストフィクスチャ(実HTMLキャプチャ)は整形対象外
+**/worker-configuration.d.ts
+pipeline/src/sources/fixtures/

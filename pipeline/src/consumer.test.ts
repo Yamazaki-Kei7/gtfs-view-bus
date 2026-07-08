@@ -90,7 +90,9 @@ describe('processFeedJobMessage', () => {
 			now: () => new Date('2026-07-07T12:01:00.000Z'),
 		});
 
-		const saved = JSON.parse(bucket.store.get(jobStatusKey('job-1', 'feed-1')) ?? '{}') as FeedJobStatus;
+		const saved = JSON.parse(
+			bucket.store.get(jobStatusKey('job-1', 'feed-1')) ?? '{}',
+		) as FeedJobStatus;
 		expect(saved.jobId).toBe('job-1');
 		expect(saved.finishedAt).toBe('2026-07-07T12:01:00.000Z');
 		expect(saved.status).toBe('updated');
@@ -114,7 +116,9 @@ describe('processFeedJobMessage', () => {
 			now: () => new Date('2026-07-07T12:02:00.000Z'),
 		});
 
-		const saved = JSON.parse(bucket.store.get(jobStatusKey('job-1', 'feed-1')) ?? '{}') as FeedJobStatus;
+		const saved = JSON.parse(
+			bucket.store.get(jobStatusKey('job-1', 'feed-1')) ?? '{}',
+		) as FeedJobStatus;
 		expect(saved).toMatchObject({
 			jobId: 'job-1',
 			finishedAt: '2026-07-07T12:02:00.000Z',
@@ -178,7 +182,9 @@ describe('processFeedJobMessage', () => {
 			now: () => new Date('2026-07-07T12:05:00.000Z'),
 		});
 
-		const saved = JSON.parse(bucket.store.get(jobStatusKey('job-1', 'feed-1')) ?? '{}') as FeedJobStatus;
+		const saved = JSON.parse(
+			bucket.store.get(jobStatusKey('job-1', 'feed-1')) ?? '{}',
+		) as FeedJobStatus;
 		expect(saved).toEqual(savedStatus);
 		const index = JSON.parse(bucket.store.get('feeds.json') ?? '{}') as {
 			feeds: { id: string; status: string }[];

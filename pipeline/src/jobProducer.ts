@@ -1,4 +1,10 @@
-import { CURRENT_JOB_KEY, jobManifestKey, type FeedJobMessage, type JobCurrent, type JobManifest } from './jobState';
+import {
+	CURRENT_JOB_KEY,
+	jobManifestKey,
+	type FeedJobMessage,
+	type JobCurrent,
+	type JobManifest,
+} from './jobState';
 import { putJson, readJson, type BucketLike } from './storage';
 import type { FeedSource, FeedTarget, SourceId } from './sources/types';
 
@@ -26,7 +32,10 @@ export type CreateFeedJobResult =
 const QUEUE_SEND_BATCH_SIZE = 100;
 
 function jobTimestamp(now: Date): string {
-	return now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+	return now
+		.toISOString()
+		.replace(/[-:]/g, '')
+		.replace(/\.\d{3}Z$/, 'Z');
 }
 
 function hex(bytes: Uint8Array): string {

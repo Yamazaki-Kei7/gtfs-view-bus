@@ -8,7 +8,10 @@ export interface BucketLike {
 	delete(keys: string[]): Promise<void>;
 }
 
-export async function readJson<T extends object>(bucket: BucketLike, key: string): Promise<T | null> {
+export async function readJson<T extends object>(
+	bucket: BucketLike,
+	key: string,
+): Promise<T | null> {
 	const obj = await bucket.get(key);
 	if (obj === null) return null;
 	try {
