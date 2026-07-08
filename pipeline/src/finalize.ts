@@ -41,6 +41,7 @@ function toPublicStatus(status: FeedJobStatus): FeedStatus {
 		fromDate: status.fromDate,
 		toDate: status.toDate,
 		source: status.source,
+		prefId: status.prefId ?? null,
 		status: status.status,
 		error: status.error,
 		shapeSourceCounts: status.shapeSourceCounts,
@@ -58,6 +59,7 @@ function buildSummary(manifest: JobManifest, statuses: FeedJobStatus[]): JobSumm
 		error: statuses.filter((status) => status.status === 'error').length,
 		sources: manifest.sources,
 		published: true,
+		prefIdMissing: statuses.filter((s) => s.prefId === null || s.prefId === undefined).length,
 	};
 }
 

@@ -38,7 +38,7 @@ function fakeBucket(): BucketLike & { store: Map<string, string>; deleted: strin
 	};
 }
 
-function target(id: string, source: 'gtfs-data.jp' | 'odpt'): FeedTarget {
+function target(id: string, source: 'gtfs-data.jp' | 'odpt', prefId?: number | null): FeedTarget {
 	return {
 		id,
 		name: id,
@@ -49,6 +49,7 @@ function target(id: string, source: 'gtfs-data.jp' | 'odpt'): FeedTarget {
 		source,
 		versionId: `v-${id}`,
 		zipUrl: `https://example.com/${id}.zip`,
+		prefId,
 	};
 }
 
@@ -63,6 +64,7 @@ function status(t: FeedTarget, value: 'updated' | 'unchanged' | 'error'): FeedJo
 		fromDate: t.fromDate,
 		toDate: t.toDate,
 		source: t.source,
+		prefId: t.prefId ?? null,
 		status: value,
 		error: value === 'error' ? 'broken feed' : undefined,
 		shapeSourceCounts: value === 'updated' ? { shapes: 1, route: 0, straight: 0 } : undefined,
@@ -105,7 +107,7 @@ describe('maybeFinalizeJob', () => {
 
 	it('全status完了時だけfeeds.json/summary/currentを書き、孤児掃除する', async () => {
 		const bucket = fakeBucket();
-		const targets = [target('a', 'gtfs-data.jp'), target('b', 'odpt')];
+		const targets = [target('a', 'gtfs-data.jp', 13), target('b', 'odpt', null)];
 		const manifest: JobManifest = {
 			jobId: 'job-1',
 			createdAt: '2026-07-07T12:00:00.000Z',
@@ -129,6 +131,7 @@ describe('maybeFinalizeJob', () => {
 		expect(index.generatedAt).toBe('2026-07-07T12:00:00.000Z');
 		expect(index.feeds.map((feed) => feed.id)).toEqual(['a', 'b']);
 		expect(index.feeds[0].shapeSourceCounts).toEqual({ shapes: 1, route: 0, straight: 0 });
+		expect(index.feeds.map((f) => (f as { prefId?: number | null }).prefId)).toEqual([13, null]);
 		const summary = JSON.parse(bucket.store.get(jobSummaryKey('job-1')) ?? '{}') as JobSummary;
 		expect(summary).toEqual({
 			jobId: 'job-1',
@@ -139,6 +142,7 @@ describe('maybeFinalizeJob', () => {
 			error: 1,
 			sources: { 'gtfs-data.jp': 1, odpt: 1 },
 			published: true,
+			prefIdMissing: 1,
 		});
 		expect(JSON.parse(bucket.store.get(CURRENT_JOB_KEY) ?? '{}')).toMatchObject({
 			jobId: 'job-1',

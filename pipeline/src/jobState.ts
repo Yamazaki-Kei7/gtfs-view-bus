@@ -51,6 +51,7 @@ export interface JobSummary {
 	error: number;
 	sources: Record<SourceId, number>;
 	published: boolean;
+	prefIdMissing: number;
 }
 
 export const CURRENT_JOB_KEY = 'pipeline/jobs/current.json';
