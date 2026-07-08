@@ -39,8 +39,8 @@ pnpm --filter pipeline cf:check
 ```bash
 pnpm --filter pipeline test
 pnpm --filter pipeline check
-pnpm --filter pipeline cf:check
 pnpm --filter pipeline cf:types
+pnpm --filter pipeline cf:check
 ```
 
 ## ODPT manifest update
