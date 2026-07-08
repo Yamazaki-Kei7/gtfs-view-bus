@@ -184,23 +184,34 @@
 			.catch((e: Error) => (loadError = e.message));
 	});
 
-	// 選択県(または prefId 無しなら全量)に応じてフィードデータをロードし直す
+	// 選択県(または prefId 無しなら全量)に応じてフィードデータをロードし直す。
+	// 県を素早く切替えた際に古いロードが新しい選択を上書きしないよう、cleanup の disposed で在庫のロードを無効化する。
 	$effect(() => {
 		const idx = index;
 		if (!idx) return;
+		let disposed = false;
 		// prefId 未投入 → 従来どおり全量表示にフォールバック
 		if (!hasPrefData) {
 			prefLoading = true;
 			loadAllFeeds(idx)
-				.then((d) => (data = d))
-				.catch((e: Error) => (loadError = e.message))
-				.finally(() => (prefLoading = false));
-			return;
+				.then((d) => {
+					if (!disposed) data = d;
+				})
+				.catch((e: Error) => {
+					if (!disposed) loadError = e.message;
+				})
+				.finally(() => {
+					if (!disposed) prefLoading = false;
+				});
+			return () => {
+				disposed = true;
+			};
 		}
 		const pref = selectedPref;
 		if (pref === null) {
-			// 未選択: ピッカー表示。前県の描画・状態をクリアする
+			// 未選択: ピッカー表示。前県の描画・状態・ローディングをクリアする
 			data = null;
+			prefLoading = false;
 			hidden = {};
 			selected = null;
 			selectedStop = null;
@@ -210,11 +221,19 @@
 		prefLoading = true;
 		loadPrefecture(pref, idx)
 			.then((d) => {
+				if (disposed) return;
 				data = d;
 				fitToStops(d);
 			})
-			.catch((e: Error) => (loadError = e.message))
-			.finally(() => (prefLoading = false));
+			.catch((e: Error) => {
+				if (!disposed) loadError = e.message;
+			})
+			.finally(() => {
+				if (!disposed) prefLoading = false;
+			});
+		return () => {
+			disposed = true;
+		};
 	});
 
 	// ロード済み県の停留所範囲へ地図を寄せる(県ポリゴンbboxは離島で巨大になるため使わない)。
