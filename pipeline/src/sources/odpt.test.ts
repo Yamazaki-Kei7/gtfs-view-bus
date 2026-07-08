@@ -54,6 +54,7 @@ describe('createOdptSource', () => {
 			source: 'odpt',
 			versionId: '/files-open/odpt/TakasakiCity/yosiibus-20260421.zip',
 			zipUrl: 'https://api-public.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip?date=current',
+			prefId: null,
 		});
 	});
 
@@ -69,5 +70,29 @@ describe('createOdptSource', () => {
 		expect(targets).toHaveLength(1);
 		expect(targets[0].versionId).toBe('');
 		expect(targets[0].zipUrl).toContain('/files/odpt/TakasakiCity/yosiibus.zip');
+	});
+
+	it('マニフェストのprefIdをtargetへ通す', async () => {
+		const source = createOdptSource({
+			generatedAt: '2026-07-08T00:00:00.000Z',
+			feeds: [
+				{
+					datasetId: 'd',
+					resourceId: 'r',
+					operator: 'AkaiwaCity',
+					feed: 'AllLines',
+					name: 'テスト',
+					orgName: 'テスト市',
+					license: null,
+					fromDate: '',
+					toDate: '',
+					zipUrl: 'https://example.com/a.zip',
+					prefId: 33,
+				},
+			],
+		});
+		const fetcher = (async () => new Response('x', { status: 500 })) as unknown as typeof fetch;
+		const targets = await source.listTargets(fetcher);
+		expect(targets[0].prefId).toBe(33);
 	});
 });

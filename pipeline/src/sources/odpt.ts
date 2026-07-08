@@ -32,6 +32,7 @@ function targetBase(entry: OdptManifestEntry): Omit<FeedTarget, 'versionId'> {
 		toDate: entry.toDate,
 		source: 'odpt',
 		zipUrl: entry.zipUrl,
+		prefId: entry.prefId ?? null,
 	};
 }
 
