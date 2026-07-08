@@ -20,7 +20,7 @@
 			},
 		],
 	},
-	// limits.cpu_ms は Workers Paid 専用。Paid 化したら { "cpu_ms": 300000 } を再設定して
-	// 全国変換の長時間CPUを許可する(Free ではそもそも Cron 完走しない)。
+	// 全国変換の長時間CPUを許可する(Workers Paid 専用。Free では code 100328 で拒否)。
+	"limits": { "cpu_ms": 300000 },
 	"observability": { "enabled": true, "head_sampling_rate": 1 },
 }
