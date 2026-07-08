@@ -1,11 +1,10 @@
-import { strToU8, zipSync } from 'fflate';
-import { FIXTURE_FILES } from 'gtfs-core';
 import { describe, expect, it } from 'vitest';
-import { processFeedJobMessage } from './consumer';
+import { processFeedJobMessage, type FeedJobProcessor } from './consumer';
 import {
 	CURRENT_JOB_KEY,
 	type FeedJobMessage,
 	type FeedJobStatus,
+	type FeedStatus,
 	jobManifestKey,
 	jobStatusKey,
 } from './jobState';
@@ -34,11 +33,7 @@ function fakeBucket(): BucketLike & { store: Map<string, string> } {
 	};
 }
 
-const FIXTURE_ZIP = zipSync(
-	Object.fromEntries(Object.entries(FIXTURE_FILES).map(([key, value]) => [key, strToU8(value)])),
-);
-
-function message(zipUrl = 'https://example.com/feed.zip'): FeedJobMessage {
+function message(): FeedJobMessage {
 	return {
 		jobId: 'job-1',
 		target: {
@@ -50,18 +45,33 @@ function message(zipUrl = 'https://example.com/feed.zip'): FeedJobMessage {
 			toDate: '',
 			source: 'gtfs-data.jp',
 			versionId: 'v1',
-			zipUrl,
+			zipUrl: 'https://example.com/feed.zip',
 		},
 	};
 }
 
-function fetcher(): typeof fetch {
-	const impl = async (input: RequestInfo | URL): Promise<Response> => {
-		const url = String(input);
-		if (url.endsWith('feed.zip')) return new Response(FIXTURE_ZIP);
-		return new Response('not found', { status: 404 });
+function status(value: FeedStatus['status'], error?: string): FeedStatus {
+	return {
+		id: 'feed-1',
+		name: 'feed-1',
+		orgName: 'org',
+		license: null,
+		fromDate: '',
+		toDate: '',
+		source: 'gtfs-data.jp',
+		status: value,
+		error,
+		shapeSourceCounts: value === 'updated' ? { shapes: 1, route: 0, straight: 0 } : undefined,
 	};
-	return impl as typeof fetch;
+}
+
+function processor(result: FeedStatus, calls: FeedJobMessage[]): FeedJobProcessor {
+	return {
+		async process(body) {
+			calls.push(body);
+			return result;
+		},
+	};
 }
 
 function saveManifest(bucket: ReturnType<typeof fakeBucket>, body: FeedJobMessage): void {
@@ -82,10 +92,11 @@ describe('processFeedJobMessage', () => {
 		const bucket = fakeBucket();
 		const body = message();
 		saveManifest(bucket, body);
+		const calls: FeedJobMessage[] = [];
 
 		await processFeedJobMessage({
 			bucket,
-			fetcher: fetcher(),
+			processor: processor(status('updated'), calls),
 			message: body,
 			now: () => new Date('2026-07-07T12:01:00.000Z'),
 		});
@@ -96,6 +107,7 @@ describe('processFeedJobMessage', () => {
 		expect(saved.jobId).toBe('job-1');
 		expect(saved.finishedAt).toBe('2026-07-07T12:01:00.000Z');
 		expect(saved.status).toBe('updated');
+		expect(calls).toEqual([body]);
 		expect(JSON.parse(bucket.store.get(CURRENT_JOB_KEY) ?? '{}')).toMatchObject({
 			jobId: 'job-1',
 			status: 'completed',
@@ -106,12 +118,13 @@ describe('processFeedJobMessage', () => {
 
 	it('通常のフィード処理失敗もerror statusとして保存してfinalizeする', async () => {
 		const bucket = fakeBucket();
-		const body = message('https://example.com/missing.zip');
+		const body = message();
 		saveManifest(bucket, body);
+		const calls: FeedJobMessage[] = [];
 
 		await processFeedJobMessage({
 			bucket,
-			fetcher: fetcher(),
+			processor: processor(status('error', 'zip fetch failed: 404'), calls),
 			message: body,
 			now: () => new Date('2026-07-07T12:02:00.000Z'),
 		});
@@ -125,6 +138,7 @@ describe('processFeedJobMessage', () => {
 			status: 'error',
 			error: 'zip fetch failed: 404',
 		});
+		expect(calls).toEqual([body]);
 		const index = JSON.parse(bucket.store.get('feeds.json') ?? '{}') as {
 			feeds: { id: string; status: string; error?: string }[];
 		};
@@ -140,11 +154,12 @@ describe('processFeedJobMessage', () => {
 	it('manifestを読めない場合はstatus保存後にthrowする', async () => {
 		const bucket = fakeBucket();
 		const body = message();
+		const calls: FeedJobMessage[] = [];
 
 		await expect(
 			processFeedJobMessage({
 				bucket,
-				fetcher: fetcher(),
+				processor: processor(status('updated'), calls),
 				message: body,
 				now: () => new Date('2026-07-07T12:03:00.000Z'),
 			}),
@@ -171,13 +186,15 @@ describe('processFeedJobMessage', () => {
 			shapeSourceCounts: { shapes: 1, route: 0, straight: 0 },
 		};
 		bucket.store.set(jobStatusKey('job-1', 'feed-1'), JSON.stringify(savedStatus));
-		const impl = async (): Promise<Response> => {
-			throw new Error('fetch should not run on status retry');
+		const failingProcessor: FeedJobProcessor = {
+			async process() {
+				throw new Error('processor should not run on status retry');
+			},
 		};
 
 		await processFeedJobMessage({
 			bucket,
-			fetcher: impl as typeof fetch,
+			processor: failingProcessor,
 			message: body,
 			now: () => new Date('2026-07-07T12:05:00.000Z'),
 		});

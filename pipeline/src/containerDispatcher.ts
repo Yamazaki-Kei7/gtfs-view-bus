@@ -1,5 +1,3 @@
-import { getContainer } from '@cloudflare/containers';
-import type { Container } from '@cloudflare/containers';
 import {
 	CONTAINER_PROCESS_PATH,
 	CONTAINER_PROCESS_TIMEOUT_MS,
@@ -25,11 +23,11 @@ export interface DispatchFeedToContainerDeps {
 }
 
 export function createContainerResolver(
-	binding: DurableObjectNamespace<Container>,
+	binding: DurableObjectNamespace,
 ): ContainerResolver {
 	return {
 		get(name) {
-			return getContainer(binding, name);
+			return binding.get(binding.idFromName(name));
 		},
 	};
 }
