@@ -18,3 +18,15 @@ export function cumulativeDistances(coords: LngLat[]): number[] {
 	}
 	return cum;
 }
+
+function median(values: number[]): number {
+	const sorted = [...values].sort((a, b) => a - b);
+	const mid = Math.floor(sorted.length / 2);
+	return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+/** 座標群の代表点。外れ値の影響を抑えるため成分別の中央値を返す。空配列は null。 */
+export function centroidOf(coords: LngLat[]): LngLat | null {
+	if (coords.length === 0) return null;
+	return [median(coords.map((c) => c[0])), median(coords.map((c) => c[1]))];
+}
