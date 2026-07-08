@@ -1,42 +1,60 @@
-import type { BucketLike } from './run';
-import { runPipeline } from './run';
+/// <reference path="../worker-configuration.d.ts" />
+
+import { processFeedJobMessage } from './consumer';
+import { createFeedJob } from './jobProducer';
+import type { FeedJobMessage } from './jobState';
+import { toBucketLike } from './storage';
 import { createGtfsDataJpSource } from './sources/gtfsDataJp';
-import { createOdptSource } from './sources/odpt';
+import { createOdptSource, withOdptConsumerKey } from './sources/odpt';
 
-interface Env {
-	DATA_BUCKET: R2Bucket;
-	GTFS_PREF_ID: string;
-}
-
-/** R2Bucket の戻り値型を BucketLike の期待へ薄くラップする */
-function toBucketLike(bucket: R2Bucket): BucketLike {
-	return {
-		get: (key) => bucket.get(key),
-		put: async (key, value) => {
-			await bucket.put(key, value);
-		},
-		list: async (options) => {
-			const res = await bucket.list({ prefix: options.prefix, cursor: options.cursor });
-			return {
-				objects: res.objects.map((o) => ({ key: o.key })),
-				truncated: res.truncated,
-				cursor: res.truncated ? res.cursor : undefined,
-			};
-		},
-		delete: async (keys) => {
-			await bucket.delete(keys);
-		},
-	};
+function randomBytes(): Uint8Array {
+	const bytes = new Uint8Array(3);
+	crypto.getRandomValues(bytes);
+	return bytes;
 }
 
 export default {
 	async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
 		ctx.waitUntil(
-			runPipeline({
+			createFeedJob({
 				bucket: toBucketLike(env.DATA_BUCKET),
-				fetcher: fetch,
-				sources: [createGtfsDataJpSource(env.GTFS_PREF_ID), createOdptSource()],
+				queue: {
+					sendBatch: async (messages) => {
+						await env.FEED_QUEUE.sendBatch(messages);
+					},
+				},
+				fetcher: withOdptConsumerKey(fetch, env.ODPT_CONSUMER_KEY),
+				sources: [
+					createGtfsDataJpSource(),
+					createOdptSource(undefined, { includeKeyRequired: Boolean(env.ODPT_CONSUMER_KEY) }),
+				],
+				now: () => new Date(),
+				randomBytes,
 			}),
 		);
 	},
-} satisfies ExportedHandler<Env>;
+	async queue(batch: MessageBatch<FeedJobMessage>, env: Env): Promise<void> {
+		const bucket = toBucketLike(env.DATA_BUCKET);
+		for (const message of batch.messages) {
+			try {
+				await processFeedJobMessage({
+					bucket,
+					fetcher: withOdptConsumerKey(fetch, env.ODPT_CONSUMER_KEY),
+					message: message.body,
+					now: () => new Date(),
+				});
+				message.ack();
+			} catch (error) {
+				console.error(
+					JSON.stringify({
+						event: 'feed_job_message_failed',
+						messageId: message.id,
+						attempts: message.attempts,
+						error: error instanceof Error ? error.message : String(error),
+					}),
+				);
+				message.retry();
+			}
+		}
+	},
+} satisfies ExportedHandler<Env, FeedJobMessage>;

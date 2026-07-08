@@ -1,132 +1,89 @@
-import type { FeedDescriptor, FeedSource } from './types';
+import manifestJson from './odptManifest.json';
+import type { OdptManifestEntry, OdptManifestFile } from './odptManifestTypes';
+import type { FeedSource, FeedTarget } from './types';
 
-interface OdptFeedDef {
-	operator: string;
-	feed: string;
-	name: string;
-	orgName: string;
-}
-
-/**
- * 配信対象のODPTフィード一覧。ODPTには県別一覧APIが無いためハードコードする。
- * 全フィード CC BY 4.0(各CKANデータセットページ https://ckan.odpt.org/ に明記)。
- * 選定根拠は docs/superpowers/specs/2026-07-06-odpt-datasource-design.md を参照。
- */
-export const ODPT_FEEDS: OdptFeedDef[] = [
-	{ operator: 'TakasakiCity', feed: 'yosiibus', name: 'よしいバス', orgName: '高崎市' },
-	{ operator: 'GunmaBus', feed: 'AllLines', name: '群馬バス(全路線)', orgName: '群馬バス' },
-	{
-		operator: 'GunmachuoBus',
-		feed: 'AllLines',
-		name: '群馬中央バス(全路線)',
-		orgName: '群馬中央バス',
-	},
-	{
-		operator: 'JoshinKankoBus',
-		feed: 'AllLines',
-		name: '上信観光バス(全路線)',
-		orgName: '上信観光バス',
-	},
-	{
-		operator: 'JoshinHire',
-		feed: 'AllLines',
-		name: '上信ハイヤー(全路線)',
-		orgName: '上信ハイヤー',
-	},
-	{
-		operator: 'Kan_etsuTransportation',
-		feed: 'AllLines',
-		name: '関越交通(全路線)',
-		orgName: '関越交通',
-	},
-	{
-		operator: 'NipponChuoBus',
-		feed: 'Maebashi_Area',
-		name: '日本中央バス(前橋エリア)',
-		orgName: '日本中央バス',
-	},
-	{
-		operator: 'NagaiTransportation',
-		feed: 'AllLines',
-		name: '永井運輸(全路線)',
-		orgName: '永井運輸',
-	},
-];
-
-const API_BASE = 'https://api-public.odpt.org/api/v4/files/odpt';
-
-function zipUrl(def: OdptFeedDef): string {
-	return `${API_BASE}/${def.operator}/${def.feed}.zip?date=current`;
-}
+const ODPT_MANIFEST = manifestJson as OdptManifestFile;
 
 async function sha256Hex(data: Uint8Array<ArrayBuffer>): Promise<string> {
 	const digest = await crypto.subtle.digest('SHA-256', data);
 	return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/**
- * versionId(と200直返し時のみzip本体)を解決する。
- * 302のLocationパスにはデータ版数入りのファイル名が含まれるため、
- * zip本体をダウンロードせずに更新有無を判定できる。
- */
-async function resolveVersion(
-	fetcher: typeof fetch,
-	def: OdptFeedDef,
-): Promise<{ versionId: string; body?: Uint8Array }> {
-	const res = await fetcher(zipUrl(def), { redirect: 'manual' });
+async function resolveVersion(fetcher: typeof fetch, entry: OdptManifestEntry): Promise<string> {
+	const res = await fetcher(entry.zipUrl, { redirect: 'manual' });
 	if (res.status >= 300 && res.status < 400) {
 		const loc = res.headers.get('location');
-		if (!loc) throw new Error(`redirect without location: ${def.operator}/${def.feed}`);
-		return { versionId: new URL(loc, API_BASE).pathname };
+		if (!loc) throw new Error(`redirect without location: ${entry.operator}/${entry.feed}`);
+		return new URL(loc, entry.zipUrl).pathname;
 	}
 	if (res.ok) {
-		// リダイレクトを挟まない構成に変わった場合: 本体のハッシュを版数とし、本体は変換に再利用する
-		const body = new Uint8Array(await res.arrayBuffer());
-		return { versionId: await sha256Hex(body), body };
+		return sha256Hex(new Uint8Array(await res.arrayBuffer()));
 	}
-	throw new Error(`odpt zip fetch failed: ${res.status} (${def.operator}/${def.feed})`);
+	throw new Error(`odpt zip fetch failed: ${res.status} (${entry.operator}/${entry.feed})`);
 }
 
-/** 公共交通オープンデータセンター(ODPT)のファイルAPIをFeedSourceへ適合させる */
-export function createOdptSource(): FeedSource {
+function targetBase(entry: OdptManifestEntry): Omit<FeedTarget, 'versionId'> {
+	return {
+		id: `odpt~${entry.operator}~${entry.feed}`,
+		name: entry.name,
+		orgName: entry.orgName,
+		license: entry.license,
+		fromDate: entry.fromDate,
+		toDate: entry.toDate,
+		source: 'odpt',
+		zipUrl: entry.zipUrl,
+		prefId: entry.prefId ?? null,
+	};
+}
+
+export interface OdptSourceOptions {
+	/** acl:consumerKey が必要な api.odpt.org 配布フィードも対象に含める(キー設定時のみ true にする) */
+	includeKeyRequired?: boolean;
+}
+
+/** 公共交通オープンデータセンター(ODPT)の静的マニフェストをFeedSourceへ適合させる */
+export function createOdptSource(
+	manifest: OdptManifestFile = ODPT_MANIFEST,
+	options: OdptSourceOptions = {},
+): FeedSource {
 	return {
 		sourceId: 'odpt',
-		async listFeeds(fetcher) {
-			const descriptors: FeedDescriptor[] = [];
-			for (const def of ODPT_FEEDS) {
-				const base = {
-					id: `odpt~${def.operator}~${def.feed}`,
-					name: def.name,
-					orgName: def.orgName,
-					license: 'CC BY 4.0',
-					fromDate: '',
-					toDate: '',
-					source: 'odpt' as const,
-				};
+		async listTargets(fetcher) {
+			const targets: FeedTarget[] = [];
+			for (const entry of manifest.feeds) {
+				if (entry.requiresKey && !options.includeKeyRequired) continue;
+				const base = targetBase(entry);
 				try {
-					const { versionId, body } = await resolveVersion(fetcher, def);
-					descriptors.push({
-						...base,
-						versionId,
-						fetchZip: body
-							? async () => body
-							: async (f) => {
-									const res = await f(zipUrl(def));
-									if (!res.ok) throw new Error(`zip fetch failed: ${res.status}`);
-									return new Uint8Array(await res.arrayBuffer());
-								},
-					});
-				} catch (e) {
-					// 版数解決に失敗したフィードはメインループのフィード単位エラー処理に載せるため、
-					// 「fetchZipが必ず失敗する記述子」として一覧に残す(掃除の対象にもならない)
-					descriptors.push({
-						...base,
-						versionId: '',
-						fetchZip: () => Promise.reject(e instanceof Error ? e : new Error(String(e))),
-					});
+					targets.push({ ...base, versionId: await resolveVersion(fetcher, entry) });
+				} catch {
+					targets.push({ ...base, versionId: '' });
 				}
 			}
-			return descriptors;
+			return targets;
 		},
 	};
+}
+
+/**
+ * api.odpt.org(開発者キー必須の配布ホスト)へのリクエストにだけ acl:consumerKey を付与する
+ * fetcher を返す。キーを manifest・Queueメッセージ・R2 に保存せず、取得の瞬間だけ注入するための
+ * ラッパー。キー未設定なら元の fetcher をそのまま返す(public のみの現行動作)。
+ * キー名のコロンを ODPT の例示どおり保つため、URLSearchParams でなく文字列結合で付ける。
+ */
+export function withOdptConsumerKey(
+	fetcher: typeof fetch,
+	consumerKey: string | undefined,
+): typeof fetch {
+	if (!consumerKey) return fetcher;
+	const impl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+		if (typeof input === 'string' || input instanceof URL) {
+			const url = String(input);
+			if (new URL(url).hostname === 'api.odpt.org') {
+				const sep = url.includes('?') ? '&' : '?';
+				return fetcher(`${url}${sep}acl:consumerKey=${encodeURIComponent(consumerKey)}`, init);
+			}
+		}
+		return fetcher(input, init);
+	};
+	return impl as typeof fetch;
 }

@@ -19,6 +19,8 @@ export interface FeedIndexEntry {
 	status: string;
 	/** 取得元レジストリ。旧feeds.json(移行前)には無いためoptional */
 	source?: string;
+	/** JIS 都道府県コード(1〜47)。旧feeds.json / 未解決は null|undefined */
+	prefId?: number | null;
 }
 
 export interface FeedIndex {
@@ -35,7 +37,6 @@ export interface StopFeature {
 }
 
 export interface LoadedData {
-	index: FeedIndex;
 	feeds: CatalogFeed[];
 	stops: GeneratedFeatureCollection<StopFeature>;
 }
@@ -49,14 +50,22 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 	return (await res.json()) as T;
 }
 
-export async function loadAll(): Promise<LoadedData> {
+/** feeds.json(インデックス)のみ取得する。都道府県セレクタと件数集計に使う。 */
+export async function loadIndex(): Promise<FeedIndex> {
 	const index = await fetchJson<FeedIndex>('/data/feeds.json');
 	if (!index) throw new Error('feeds.json の取得に失敗しました');
+	return index;
+}
+
+/** 指定フィード集合の bundle と stops を並列取得する(loadIndex 後に選択県分だけ呼ぶ)。 */
+async function loadFeeds(entries: FeedIndexEntry[]): Promise<LoadedData> {
 	const stops: StopFeature[] = [];
+	// 変換に失敗したフィード(status: error)は成果物が無い(または古い)ため取得しない
+	const targets = entries.filter((f) => f.status !== 'error');
 	// Promise.all は入力順で結果を返すため、feeds.json の順序が保たれる(パネルの事業者並びを毎回同一にする)
 	const feeds = (
 		await Promise.all(
-			index.feeds.map(async (f) => {
+			targets.map(async (f) => {
 				const [bundle, s] = await Promise.all([
 					fetchJson<FeedBundle>(`/data/feeds/${f.id}/bundle.json`),
 					fetchJson<GeneratedFeatureCollection<PointFeature>>(`/data/feeds/${f.id}/stops.geojson`),
@@ -82,7 +91,27 @@ export async function loadAll(): Promise<LoadedData> {
 			}),
 		)
 	).filter((f): f is CatalogFeed => f !== null);
-	return { index, feeds, stops: { type: 'FeatureCollection', features: stops } };
+	return { stops: { type: 'FeatureCollection', features: stops }, feeds };
+}
+
+/** 指定都道府県のフィードのみロードする。 */
+export function loadPrefecture(prefId: number, index: FeedIndex): Promise<LoadedData> {
+	return loadFeeds(index.feeds.filter((f) => f.prefId === prefId));
+}
+
+/** フォールバック: prefId が無い(旧feeds.json / 未投入)場合に全フィードをロードする。 */
+export function loadAllFeeds(index: FeedIndex): Promise<LoadedData> {
+	return loadFeeds(index.feeds);
+}
+
+/** 都道府県別の登録フィード数(prefId=null は集計外)。 */
+export function prefectureCounts(index: FeedIndex): Map<number, number> {
+	const counts = new Map<number, number>();
+	for (const f of index.feeds) {
+		if (f.prefId == null) continue;
+		counts.set(f.prefId, (counts.get(f.prefId) ?? 0) + 1);
+	}
+	return counts;
 }
 
 interface RouteLineFeature {

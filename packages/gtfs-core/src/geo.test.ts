@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cumulativeDistances, haversineMeters } from './geo';
+import { centroidOf, cumulativeDistances, haversineMeters } from './geo';
 
 describe('haversineMeters', () => {
 	it('経度0.01度(緯度36度)は約900mになる', () => {
@@ -28,5 +28,26 @@ describe('cumulativeDistances', () => {
 
 	it('空配列は空配列を返す(coords と同じ長さの契約)', () => {
 		expect(cumulativeDistances([])).toEqual([]);
+	});
+});
+
+describe('centroidOf', () => {
+	it('空配列は null', () => {
+		expect(centroidOf([])).toBeNull();
+	});
+
+	it('外れ値に引きずられない成分別中央値を返す', () => {
+		const pts: [number, number][] = [
+			[139.7, 35.68],
+			[139.71, 35.69],
+			[139.69, 35.67],
+			[999, 999],
+		];
+		const c = centroidOf(pts);
+		expect(c).not.toBeNull();
+		expect(c![0]).toBeGreaterThan(139.6);
+		expect(c![0]).toBeLessThan(139.8);
+		expect(c![1]).toBeGreaterThan(35.6);
+		expect(c![1]).toBeLessThan(35.8);
 	});
 });

@@ -1,9 +1,10 @@
-import type { FeedDescriptor, FeedSource } from './types';
+import type { FeedSource, FeedTarget } from './types';
 
 export interface GtfsFileEntry {
 	organization_id: string;
 	organization_name: string;
 	feed_id: string;
+	feed_pref_id: number;
 	feed_name: string;
 	feed_license_id: string | null;
 	file_uid: string;
@@ -15,6 +16,10 @@ export interface GtfsFileEntry {
 	file_last_updated_at: string;
 }
 
+export interface GtfsDataJpSourceOptions {
+	prefIds?: number[];
+}
+
 interface FilesResponse {
 	code: number;
 	body: GtfsFileEntry[];
@@ -22,32 +27,46 @@ interface FilesResponse {
 
 const API_BASE = 'https://api.gtfs-data.jp/v2';
 
-/** GTFSデータリポジトリ(gtfs-data.jp)の県別一覧APIをFeedSourceへ適合させる */
-export function createGtfsDataJpSource(prefId: string): FeedSource {
+function filesUrl(prefId?: number): string {
+	return prefId === undefined ? `${API_BASE}/files` : `${API_BASE}/files?pref=${prefId}`;
+}
+
+async function fetchEntries(fetcher: typeof fetch, url: string): Promise<GtfsFileEntry[]> {
+	const listRes = await fetcher(url);
+	if (!listRes.ok) throw new Error(`feed list fetch failed: ${listRes.status}`);
+	const list = (await listRes.json()) as FilesResponse;
+	if (!Array.isArray(list.body)) throw new Error('feed list response malformed');
+	return list.body;
+}
+
+function toTarget(entry: GtfsFileEntry): FeedTarget {
+	return {
+		id: `${entry.organization_id}~${entry.feed_id}~${entry.file_from_date}`,
+		name: entry.feed_name,
+		orgName: entry.organization_name,
+		license: entry.feed_license_id,
+		fromDate: entry.file_from_date,
+		toDate: entry.file_to_date,
+		source: 'gtfs-data.jp',
+		versionId: entry.file_uid,
+		zipUrl: entry.file_url,
+		routesGeojsonUrl: entry.file_route_url ?? undefined,
+		prefId: entry.feed_pref_id,
+	};
+}
+
+/** GTFSデータリポジトリ(gtfs-data.jp)の一覧APIをFeedSourceへ適合させる */
+export function createGtfsDataJpSource(options: GtfsDataJpSourceOptions = {}): FeedSource {
 	return {
 		sourceId: 'gtfs-data.jp',
-		async listFeeds(fetcher) {
-			const listRes = await fetcher(`${API_BASE}/files?pref=${prefId}`);
-			if (!listRes.ok) throw new Error(`feed list fetch failed: ${listRes.status}`);
-			const list = (await listRes.json()) as FilesResponse;
-			// HTTP 200でエラーボディが返るケースの診断性を上げる実行時ガード
-			if (!Array.isArray(list.body)) throw new Error('feed list response malformed');
-			return list.body.map((entry): FeedDescriptor => ({
-				id: `${entry.organization_id}~${entry.feed_id}~${entry.file_from_date}`,
-				name: entry.feed_name,
-				orgName: entry.organization_name,
-				license: entry.feed_license_id,
-				fromDate: entry.file_from_date,
-				toDate: entry.file_to_date,
-				source: 'gtfs-data.jp',
-				versionId: entry.file_uid,
-				routesGeojsonUrl: entry.file_route_url ?? undefined,
-				async fetchZip(f) {
-					const zipRes = await f(entry.file_url);
-					if (!zipRes.ok) throw new Error(`zip fetch failed: ${zipRes.status}`);
-					return new Uint8Array(await zipRes.arrayBuffer());
-				},
-			}));
+		async listTargets(fetcher) {
+			const prefIds = options.prefIds;
+			const urls = prefIds && prefIds.length > 0 ? prefIds.map(filesUrl) : [filesUrl()];
+			const entries: GtfsFileEntry[] = [];
+			for (const url of urls) {
+				entries.push(...(await fetchEntries(fetcher, url)));
+			}
+			return entries.map(toTarget);
 		},
 	};
 }

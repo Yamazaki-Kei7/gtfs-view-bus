@@ -3,7 +3,7 @@ import { FIXTURE_FILES, FIXTURE_ROUTES_GEOJSON } from 'gtfs-core';
 import { describe, expect, it } from 'vitest';
 import { runPipeline, type BucketLike } from './run';
 import { createGtfsDataJpSource, type GtfsFileEntry } from './sources/gtfsDataJp';
-import type { FeedDescriptor, FeedSource } from './sources/types';
+import type { FeedTarget, FeedSource } from './sources/types';
 
 function fakeBucket(options?: {
 	/** listの1ページあたり件数。指定するとtruncated/cursorのページングを模す */
@@ -44,6 +44,7 @@ function entry(overrides: Partial<GtfsFileEntry>): GtfsFileEntry {
 		organization_id: 'testorg',
 		organization_name: 'テスト協議会',
 		feed_id: 'testfeed',
+		feed_pref_id: 10,
 		feed_name: 'テストバス',
 		feed_license_id: 'CC BY 4.0',
 		file_uid: 'uid-1',
@@ -68,6 +69,7 @@ function fetcherFor(entries: GtfsFileEntry[]): typeof fetch {
 			return new Response(JSON.stringify({ code: 200, message: 'ok', body: entries }));
 		}
 		if (url.endsWith('feed.zip')) return new Response(FIXTURE_ZIP);
+		if (url.includes('.zip?')) return new Response(FIXTURE_ZIP);
 		if (url.endsWith('routes.geojson')) return new Response(FIXTURE_ROUTES_GEOJSON);
 		if (url.endsWith('.geojson')) {
 			return new Response(JSON.stringify({ type: 'FeatureCollection', features: [] }));
@@ -78,7 +80,7 @@ function fetcherFor(entries: GtfsFileEntry[]): typeof fetch {
 }
 
 /** GeoJSON別配布の無いODPT風フィードを模した記述子 */
-function odptDescriptor(): FeedDescriptor {
+function odptDescriptor(): FeedTarget {
 	return {
 		id: 'odpt~TestOp~AllLines',
 		name: 'テスト事業者(全路線)',
@@ -88,12 +90,12 @@ function odptDescriptor(): FeedDescriptor {
 		toDate: '',
 		source: 'odpt',
 		versionId: '/files-open/odpt/TestOp/AllLines-20260601.zip',
-		fetchZip: async () => FIXTURE_ZIP,
+		zipUrl: 'https://api-public.odpt.org/api/v4/files/odpt/TestOp/AllLines.zip?date=current',
 	};
 }
 
-function stubSource(descriptors: FeedDescriptor[]): FeedSource {
-	return { sourceId: 'odpt', listFeeds: async () => descriptors };
+function stubSource(descriptors: FeedTarget[]): FeedSource {
+	return { sourceId: 'odpt', listTargets: async () => descriptors };
 }
 
 describe('runPipeline', () => {
@@ -102,7 +104,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(statuses).toHaveLength(1);
 		expect(statuses[0].status).toBe('updated');
@@ -143,7 +145,7 @@ describe('runPipeline', () => {
 		const deps = {
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		};
 		await runPipeline(deps);
 		const second = await runPipeline(deps);
@@ -167,7 +169,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(statuses[0].status).toBe('unchanged');
 		expect(statuses[0].shapeSourceCounts).toEqual({ shapes: 3, route: 0, straight: 0 });
@@ -192,7 +194,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		// versionId 一致でも再処理され(updated)、停留所に routeIds が付与される
 		expect(statuses[0].status).toBe('updated');
@@ -224,7 +226,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 
 		expect(statuses[0].status).toBe('updated');
@@ -249,7 +251,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(statuses[0].status).toBe('updated');
 		expect(bucket.store.has(`feeds/${id}/timetable.json`)).toBe(true);
@@ -268,7 +270,7 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([bad, entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(statuses.find((s) => s.id.startsWith('badorg'))?.status).toBe('error');
 		expect(statuses.find((s) => s.id.startsWith('testorg'))?.status).toBe('updated');
@@ -299,7 +301,7 @@ describe('runPipeline', () => {
 		await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(bucket.store.has('feeds/testorg~testfeed~2025-01-01/bundle.json')).toBe(false);
 		expect(bucket.store.has('feeds/testorg~testfeed~2025-01-01/meta.json')).toBe(false);
@@ -316,7 +318,7 @@ describe('runPipeline', () => {
 		await runPipeline({
 			bucket,
 			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		// アクティブなフィードのキーは残り、孤児キーは全ページ分削除される
 		const remaining = [...bucket.store.keys()].filter((k) => k.startsWith('feeds/orphan'));
@@ -335,13 +337,13 @@ describe('runPipeline', () => {
 		const statuses = await runPipeline({
 			bucket,
 			fetcher: fetcherFor([bad]),
-			sources: [createGtfsDataJpSource('10')],
+			sources: [createGtfsDataJpSource({ prefIds: [10] })],
 		});
 		expect(statuses[0].status).toBe('error');
 		expect(bucket.store.has('feeds/badorg~testfeed~2026-04-01/bundle.json')).toBe(true);
 	});
 
-	it('ソース一覧の取得失敗時は前回エントリを引き継ぎ、掃除をスキップする', async () => {
+	it('ソース一覧の取得失敗時は呼び出し側へthrowし、feeds.jsonを更新しない', async () => {
 		const bucket = fakeBucket();
 		bucket.store.set(
 			'feeds.json',
@@ -362,71 +364,20 @@ describe('runPipeline', () => {
 			}),
 		);
 		bucket.store.set('feeds/odpt~A~B/bundle.json', '{}');
-		// どのソースにも属さない孤児キー: 掃除が誤って実行されると消えてしまう監視対象
-		bucket.store.set('feeds/orphan~X~Y/bundle.json', '{}');
 		const failingSource: FeedSource = {
 			sourceId: 'odpt',
-			listFeeds: () => Promise.reject(new Error('down')),
+			listTargets: () => Promise.reject(new Error('down')),
 		};
-		const statuses = await runPipeline({
-			bucket,
-			fetcher: fetcherFor([]),
-			sources: [failingSource],
-		});
-		expect(statuses).toHaveLength(1);
-		expect(statuses[0].id).toBe('odpt~A~B');
-		expect(bucket.deleted).toHaveLength(0);
-		expect(bucket.store.has('feeds/odpt~A~B/bundle.json')).toBe(true);
-		// 一覧失敗時は掃除自体がスキップされるため孤児キーも残る
-		expect(bucket.store.has('feeds/orphan~X~Y/bundle.json')).toBe(true);
-	});
-
-	it('旧形式feeds.json(sourceフィールド無し)のエントリもソース障害時に引き継ぐ', async () => {
-		const bucket = fakeBucket();
-		bucket.store.set(
-			'feeds.json',
-			JSON.stringify({
-				generatedAt: '2026-07-01T00:00:00Z',
-				feeds: [
-					{
-						id: 'testorg~testfeed~2026-04-01',
-						name: '旧形式フィード',
-						orgName: 'テスト協議会',
-						license: 'CC BY 4.0',
-						fromDate: '2026-04-01',
-						toDate: '2027-03-31',
-						status: 'updated',
-					},
-				],
+		await expect(
+			runPipeline({
+				bucket,
+				fetcher: fetcherFor([]),
+				sources: [failingSource],
 			}),
-		);
-		const failingSource: FeedSource = {
-			sourceId: 'gtfs-data.jp',
-			listFeeds: () => Promise.reject(new Error('down')),
-		};
-		const statuses = await runPipeline({
-			bucket,
-			fetcher: fetcherFor([]),
-			sources: [failingSource],
-		});
-		expect(statuses).toHaveLength(1);
-		expect(statuses[0].id).toBe('testorg~testfeed~2026-04-01');
-		// 引き継ぎ時に source を補完して正規化する
-		expect(statuses[0].source).toBe('gtfs-data.jp');
-	});
-
-	it('片側ソースの一覧失敗がもう片方の処理を妨げない', async () => {
-		const bucket = fakeBucket();
-		const failingSource: FeedSource = {
-			sourceId: 'odpt',
-			listFeeds: () => Promise.reject(new Error('down')),
-		};
-		const statuses = await runPipeline({
-			bucket,
-			fetcher: fetcherFor([entry({})]),
-			sources: [createGtfsDataJpSource('10'), failingSource],
-		});
-		expect(statuses).toHaveLength(1);
-		expect(statuses[0].status).toBe('updated');
+		).rejects.toThrow('down');
+		expect(bucket.deleted).toHaveLength(0);
+		const index = JSON.parse(bucket.store.get('feeds.json') ?? '{}') as { generatedAt?: string };
+		expect(index.generatedAt).toBe('2026-07-01T00:00:00Z');
+		expect(bucket.store.has('feeds/odpt~A~B/bundle.json')).toBe(true);
 	});
 });

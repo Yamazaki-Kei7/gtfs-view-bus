@@ -28,11 +28,19 @@ export default ts.config(
 		},
 	},
 	{
+		files: ['pipeline/src/index.ts'],
+		rules: {
+			'@typescript-eslint/triple-slash-reference': 'off',
+		},
+	},
+	{
 		ignores: [
 			'**/node_modules/',
 			'**/.svelte-kit/',
 			'**/dist/',
 			'**/.wrangler/',
+			'**/.tmp/',
+			'**/worker-configuration.d.ts',
 			'docs/',
 			'infra/',
 		],
