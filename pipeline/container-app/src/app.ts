@@ -1,4 +1,5 @@
 import { CONTAINER_PROCESS_PATH, type ProcessFeedRequest } from '../../src/containerProtocol';
+import type { FeedStatus } from '../../src/jobState';
 import { processFeedTarget } from '../../src/feedProcessor';
 import { withOdptConsumerKey } from '../../src/sources/odpt';
 import { createR2HttpBucket } from './r2HttpBucket';
@@ -16,6 +17,21 @@ function jsonResponse(value: object, status = 200): Response {
 
 async function parseProcessFeedRequest(request: Request): Promise<ProcessFeedRequest> {
 	return (await request.json()) as ProcessFeedRequest;
+}
+
+function errorStatusFromRequest(body: ProcessFeedRequest, message: string): FeedStatus {
+	return {
+		id: body.target.id,
+		name: body.target.name,
+		orgName: body.target.orgName,
+		license: body.target.license,
+		fromDate: body.target.fromDate,
+		toDate: body.target.toDate,
+		source: body.target.source,
+		status: 'error',
+		prefId: body.target.prefId ?? null,
+		error: message,
+	};
 }
 
 export async function handleContainerRequest(
@@ -39,10 +55,16 @@ export async function handleContainerRequest(
 	}
 
 	const bucket = createR2HttpBucket({ baseUrl: env.R2_BASE_URL, fetcher });
-	const status = await processFeedTarget({
-		bucket,
-		fetcher: withOdptConsumerKey(fetcher, body.odptConsumerKey),
-		target: body.target,
-	});
+	let status: FeedStatus;
+	try {
+		status = await processFeedTarget({
+			bucket,
+			fetcher: withOdptConsumerKey(fetcher, body.odptConsumerKey),
+			target: body.target,
+		});
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		status = errorStatusFromRequest(body, message);
+	}
 	return jsonResponse(status);
 }

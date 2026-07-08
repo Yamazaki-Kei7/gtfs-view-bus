@@ -50,6 +50,29 @@ function processRequest(): Request {
 	});
 }
 
+function failingPutFetcher(store: Map<string, string>, calls: string[]): typeof fetch {
+	const impl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+		const url = String(input);
+		calls.push(url);
+		if (url === 'https://example.com/feed.zip') return new Response(FIXTURE_ZIP);
+		if (url === 'https://example.com/routes.geojson') return new Response(FIXTURE_ROUTES_GEOJSON);
+		if (url.startsWith('http://r2.internal/')) {
+			const key = decodeURIComponent(new URL(url).pathname.slice(1));
+			if (init?.method === 'PUT') {
+				if (key === 'feeds/feed-1/bundle.json') {
+					return new Response('bad', { status: 500 });
+				}
+				store.set(key, typeof init?.body === 'string' ? init.body : '');
+				return new Response(null, { status: 204 });
+			}
+			const value = store.get(key);
+			return value === undefined ? new Response('not found', { status: 404 }) : new Response(value);
+		}
+		return new Response('not found', { status: 404 });
+	};
+	return impl as typeof fetch;
+}
+
 describe('handleContainerRequest', () => {
 	it('POST /process-feedでGTFSを変換してR2へ成果物を書く', async () => {
 		const store = new Map<string, string>();
@@ -79,6 +102,44 @@ describe('handleContainerRequest', () => {
 			fetcher(new Map(), []),
 		);
 		expect(res.status).toBe(405);
+	});
+
+	it('R2保存失敗時はstatus:errorとしてFeedStatusを返す', async () => {
+		const store = new Map<string, string>();
+		const calls: string[] = [];
+
+		const res = await handleContainerRequest(
+			processRequest(),
+			{ R2_BASE_URL: 'http://r2.internal' },
+			failingPutFetcher(store, calls),
+		);
+
+		const status = (await res.json()) as {
+			id: string;
+			name: string;
+			orgName: string;
+			license: string | null;
+			fromDate: string;
+			toDate: string;
+			source: string;
+			prefId: number | null;
+			status: string;
+			error?: string;
+		};
+
+		expect(res.status).toBe(200);
+		expect(status).toMatchObject({
+			id: 'feed-1',
+			name: 'フィード1',
+			orgName: '事業者',
+			license: null,
+			fromDate: '2026-04-01',
+			toDate: '2027-03-31',
+			source: 'gtfs-data.jp',
+			prefId: 10,
+			status: 'error',
+		});
+		expect(status.error).toContain('R2 outbound put failed');
 	});
 
 	it('不正JSONは400を返す', async () => {
