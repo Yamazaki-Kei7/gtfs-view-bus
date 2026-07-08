@@ -21,10 +21,7 @@ describe('createR2HttpBucket', () => {
 		const bucket = createR2HttpBucket({
 			baseUrl: 'http://r2.internal',
 			fetcher: recordingFetcher(
-				new Map([[
-					'GET http://r2.internal/feeds/feed-1/meta.json',
-					new Response('{"ok":true}'),
-				]]),
+				new Map([['GET http://r2.internal/feeds/feed-1/meta.json', new Response('{"ok":true}')]]),
 				calls,
 			),
 		});
@@ -49,10 +46,9 @@ describe('createR2HttpBucket', () => {
 		const bucket = createR2HttpBucket({
 			baseUrl: 'http://r2.internal',
 			fetcher: recordingFetcher(
-				new Map([[
-					'PUT http://r2.internal/feeds/feed-1/bundle.json',
-					new Response(null, { status: 204 }),
-				]]),
+				new Map([
+					['PUT http://r2.internal/feeds/feed-1/bundle.json', new Response(null, { status: 204 })],
+				]),
 				calls,
 			),
 		});
@@ -72,10 +68,9 @@ describe('createR2HttpBucket', () => {
 		const bucket = createR2HttpBucket({
 			baseUrl: 'http://r2.internal',
 			fetcher: recordingFetcher(
-				new Map([[
-					'PUT http://r2.internal/feeds/feed-1/bundle.json',
-					new Response('bad', { status: 500 }),
-				]]),
+				new Map([
+					['PUT http://r2.internal/feeds/feed-1/bundle.json', new Response('bad', { status: 500 })],
+				]),
 				calls,
 			),
 		});

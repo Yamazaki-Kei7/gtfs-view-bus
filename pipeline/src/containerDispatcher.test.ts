@@ -23,7 +23,11 @@ function message(): FeedJobMessage {
 	};
 }
 
-function resolver(response: Response, names: string[], requests: Request[]): { get(name: string): { fetch(request: Request): Promise<Response> } } {
+function resolver(
+	response: Response,
+	names: string[],
+	requests: Request[],
+): { get(name: string): { fetch(request: Request): Promise<Response> } } {
 	return {
 		get(name) {
 			names.push(name);

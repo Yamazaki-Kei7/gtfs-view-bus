@@ -9,8 +9,8 @@
 			"image": "./Dockerfile",
 			"image_build_context": "..",
 			"max_instances": 5,
-			"instance_type": "standard-1"
-		}
+			"instance_type": "standard-1",
+		},
 	],
 	// 毎月末日 20:00 UTC = 翌月1日 05:00 JST。L記法が拒否されたら "0 0 1 * *" に変更
 	"triggers": { "crons": ["0 20 L * *"] },
@@ -19,15 +19,15 @@
 		"bindings": [
 			{
 				"name": "FEED_PROCESSOR_CONTAINER",
-				"class_name": "FeedProcessorContainer"
-			}
-		]
+				"class_name": "FeedProcessorContainer",
+			},
+		],
 	},
 	"migrations": [
 		{
 			"tag": "v1-feed-processor-container",
-			"new_sqlite_classes": ["FeedProcessorContainer"]
-		}
+			"new_sqlite_classes": ["FeedProcessorContainer"],
+		},
 	],
 	"queues": {
 		"producers": [{ "binding": "FEED_QUEUE", "queue": "gtfs-view-bus-feed-jobs" }],

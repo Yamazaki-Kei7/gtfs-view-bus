@@ -22,9 +22,7 @@ export interface DispatchFeedToContainerDeps {
 	timeoutMs?: number;
 }
 
-export function createContainerResolver(
-	binding: DurableObjectNamespace,
-): ContainerResolver {
+export function createContainerResolver(binding: DurableObjectNamespace): ContainerResolver {
 	return {
 		get(name) {
 			return binding.get(binding.idFromName(name));
