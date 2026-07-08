@@ -5,7 +5,7 @@ import { createFeedJob } from './jobProducer';
 import type { FeedJobMessage } from './jobState';
 import { toBucketLike } from './storage';
 import { createGtfsDataJpSource } from './sources/gtfsDataJp';
-import { createOdptSource } from './sources/odpt';
+import { createOdptSource, withOdptConsumerKey } from './sources/odpt';
 
 function randomBytes(): Uint8Array {
 	const bytes = new Uint8Array(3);
@@ -23,8 +23,11 @@ export default {
 						await env.FEED_QUEUE.sendBatch(messages);
 					},
 				},
-				fetcher: fetch,
-				sources: [createGtfsDataJpSource(), createOdptSource()],
+				fetcher: withOdptConsumerKey(fetch, env.ODPT_CONSUMER_KEY),
+				sources: [
+					createGtfsDataJpSource(),
+					createOdptSource(undefined, { includeKeyRequired: Boolean(env.ODPT_CONSUMER_KEY) }),
+				],
 				now: () => new Date(),
 				randomBytes,
 			}),
@@ -36,7 +39,7 @@ export default {
 			try {
 				await processFeedJobMessage({
 					bucket,
-					fetcher: fetch,
+					fetcher: withOdptConsumerKey(fetch, env.ODPT_CONSUMER_KEY),
 					message: message.body,
 					now: () => new Date(),
 				});

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createOdptSource } from './odpt';
-import type { OdptManifestFile } from './odptManifestTypes';
+import { createOdptSource, withOdptConsumerKey } from './odpt';
+import type { OdptManifestEntry, OdptManifestFile } from './odptManifestTypes';
 
 const MANIFEST: OdptManifestFile = {
 	generatedAt: '2026-07-07T00:00:00.000Z',
@@ -96,5 +96,68 @@ describe('createOdptSource', () => {
 		const fetcher = (async () => new Response('x', { status: 500 })) as unknown as typeof fetch;
 		const targets = await source.listTargets(fetcher);
 		expect(targets[0].prefId).toBe(33);
+	});
+
+	it('requiresKeyフィードは既定で除外し、includeKeyRequired時のみ含める', async () => {
+		const keyedEntry: OdptManifestEntry = {
+			datasetId: 'seibu_bus__b-bus_gtfs',
+			resourceId: 'r-seibu',
+			operator: 'SeibuBus',
+			feed: 'SeibuBus-GTFS',
+			name: '西武バス',
+			orgName: '西武バス',
+			license: 'CC BY 4.0',
+			fromDate: '',
+			toDate: '',
+			zipUrl: 'https://api.odpt.org/api/v4/files/SeibuBus/data/SeibuBus-GTFS.zip',
+			requiresKey: true,
+		};
+		const manifest: OdptManifestFile = {
+			generatedAt: '2026-07-08T00:00:00.000Z',
+			feeds: [...MANIFEST.feeds, keyedEntry],
+		};
+		const fetcher = (async () => new Response('x', { status: 503 })) as unknown as typeof fetch;
+
+		const withoutKey = await createOdptSource(manifest).listTargets(fetcher);
+		expect(withoutKey.map((t) => t.id)).toEqual(['odpt~TakasakiCity~yosiibus']);
+
+		const withKey = await createOdptSource(manifest, { includeKeyRequired: true }).listTargets(
+			fetcher,
+		);
+		expect(withKey.map((t) => t.id)).toEqual([
+			'odpt~TakasakiCity~yosiibus',
+			'odpt~SeibuBus~SeibuBus-GTFS',
+		]);
+	});
+});
+
+describe('withOdptConsumerKey', () => {
+	function recordingFetcher(calls: string[]): typeof fetch {
+		const impl = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+			calls.push(`${String(input)}|redirect=${init?.redirect ?? 'none'}`);
+			return new Response('ok');
+		};
+		return impl as typeof fetch;
+	}
+
+	it('api.odpt.orgへのリクエストにだけacl:consumerKeyを付与しinitを維持する', async () => {
+		const calls: string[] = [];
+		const fetcher = withOdptConsumerKey(recordingFetcher(calls), 'SECRET');
+		await fetcher('https://api.odpt.org/api/v4/files/SeibuBus/data/SeibuBus-GTFS.zip?date=1', {
+			redirect: 'manual',
+		});
+		await fetcher('https://api-public.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip');
+		await fetcher('https://api.gtfs-data.jp/v2/files');
+		expect(calls).toEqual([
+			'https://api.odpt.org/api/v4/files/SeibuBus/data/SeibuBus-GTFS.zip?date=1&acl:consumerKey=SECRET|redirect=manual',
+			'https://api-public.odpt.org/api/v4/files/odpt/TakasakiCity/yosiibus.zip|redirect=none',
+			'https://api.gtfs-data.jp/v2/files|redirect=none',
+		]);
+	});
+
+	it('キー未設定なら元のfetcherをそのまま返す', () => {
+		const base = recordingFetcher([]);
+		expect(withOdptConsumerKey(base, undefined)).toBe(base);
+		expect(withOdptConsumerKey(base, '')).toBe(base);
 	});
 });
