@@ -14,7 +14,9 @@ export interface DatasetMetadata {
 }
 
 const CATALOG_START_URL = 'https://ckan.odpt.org/dataset/?res_format=GTFS%2FGTFS-JP';
+// ODPTの配布URLは2形式ある: /files/odpt/<operator>/<feed>.zip と /files/<operator>/data/<name>.zip(都営バス等)
 const ODPT_ZIP_PATTERN = /\/files\/odpt\/([^/]+)\/([^/?]+)\.zip/;
+const DATA_ZIP_PATTERN = /\/files\/([^/]+)\/data\/([^/?]+)\.zip/;
 
 function absoluteUrl(href: string, baseUrl: string): string {
 	return new URL(href, baseUrl).toString();
@@ -53,15 +55,29 @@ function compareStrings(a: string, b: string): number {
 }
 
 function isGtfsFormat(format: string | undefined, labelText: string): boolean {
-	return format?.toLowerCase() === 'gtfs/gtfs-jp' || text(labelText).toLowerCase() === 'gtfs/gtfs-jp';
+	return (
+		format?.toLowerCase() === 'gtfs/gtfs-jp' || text(labelText).toLowerCase() === 'gtfs/gtfs-jp'
+	);
 }
 
 function containsGtfsFormat(value: string): boolean {
 	return text(value).toLowerCase().includes('gtfs/gtfs-jp');
 }
 
-function isPublicZipUrl(zipUrl: string): boolean {
-	return new URL(zipUrl).hostname === 'api-public.odpt.org';
+/** 配布ホスト → キー要否。Challenge限定配布(api-challenge)や未知ホストは対象外(null)。 */
+function zipUrlRequiresKey(zipUrl: string): boolean | null {
+	const hostname = new URL(zipUrl).hostname;
+	if (hostname === 'api-public.odpt.org') return false;
+	if (hostname === 'api.odpt.org') return true;
+	return null;
+}
+
+function operatorAndFeed(zipUrl: string): { operator: string; feed: string } | null {
+	const odptMatch = zipUrl.match(ODPT_ZIP_PATTERN);
+	if (odptMatch) return { operator: odptMatch[1], feed: decodeURIComponent(odptMatch[2]) };
+	const dataMatch = zipUrl.match(DATA_ZIP_PATTERN);
+	if (dataMatch) return { operator: dataMatch[1], feed: decodeURIComponent(dataMatch[2]) };
+	return null;
 }
 
 function datasetMetadata($: cheerio.CheerioAPI, datasetUrl: string): DatasetMetadata {
@@ -92,14 +108,15 @@ function entryFromZipUrl(
 	metadata: DatasetMetadata,
 ): OdptManifestEntry | null {
 	const cleanZipUrl = sanitizedZipUrl(zipUrl);
-	if (!isPublicZipUrl(cleanZipUrl)) return null;
-	const match = cleanZipUrl.match(ODPT_ZIP_PATTERN);
-	if (!match) return null;
-	return {
+	const requiresKey = zipUrlRequiresKey(cleanZipUrl);
+	if (requiresKey === null) return null;
+	const names = operatorAndFeed(cleanZipUrl);
+	if (!names) return null;
+	const entry: OdptManifestEntry = {
 		datasetId: metadata.datasetId,
 		resourceId,
-		operator: match[1],
-		feed: match[2],
+		operator: names.operator,
+		feed: names.feed,
 		name: metadata.name,
 		orgName: metadata.orgName,
 		license: metadata.license,
@@ -107,6 +124,32 @@ function entryFromZipUrl(
 		toDate: '',
 		zipUrl: cleanZipUrl,
 	};
+	// public配布のmanifest差分を変えないため、キー必要時のみフィールドを持たせる
+	if (requiresKey) entry.requiresKey = true;
+	return entry;
+}
+
+/**
+ * GTFSフィードの交通モードを推定する。本アプリはバス可視化のため、鉄道・フェリーは
+ * マニフェスト生成時に除外する。判定はデータセットID・operator・feed・名称のキーワードで行い、
+ * バス表記を最優先にする(例: 船木鉄道はバス事業者、京都市交通局はバスと地下鉄の両方を配布)。
+ */
+export function odptEntryMode(entry: OdptManifestEntry): 'bus' | 'train' | 'ferry' {
+	const latin = `${entry.datasetId} ${entry.operator} ${entry.feed} ${entry.name}`;
+	if (/bus/i.test(latin) || entry.name.includes('バス')) return 'bus';
+	if (
+		/ferr|kisen|shosen|cruise|vessel|maritime|marine|kousokusen/i.test(latin) ||
+		/フェリー|汽船|商船|船舶|航路|高速船|クルーズ|海運/.test(entry.name)
+	) {
+		return 'ferry';
+	}
+	if (
+		/train|subway|monorail|freight|railway/i.test(latin) ||
+		/鉄道|地下鉄|モノレール|電車|貨物/.test(entry.name)
+	) {
+		return 'train';
+	}
+	return 'bus';
 }
 
 function manifestEntryKey(entry: OdptManifestEntry): string {
@@ -164,7 +207,7 @@ export function parseDatasetPage(html: string, datasetUrl: string): OdptManifest
 	const metadata = datasetMetadata($, datasetUrl);
 	const entries: OdptManifestEntry[] = [];
 
-	$('a[href*="/files/odpt/"]').each((_, link) => {
+	$('a[href*="/files/"]').each((_, link) => {
 		const href = $(link).attr('href');
 		if (!href) return;
 
@@ -207,7 +250,7 @@ export function parseResourcePage(
 	const $ = cheerio.load(html);
 	const resourceId = resourceIdFromHref(resourceUrl);
 	const entries: OdptManifestEntry[] = [];
-	$('a[href*="/files/odpt/"]').each((_, link) => {
+	$('a[href*="/files/"]').each((_, link) => {
 		const href = $(link).attr('href');
 		if (!href) return;
 		const entry = entryFromZipUrl(absoluteUrl(href, resourceUrl), resourceId, metadata);
@@ -231,7 +274,10 @@ export function sortManifestEntries(entries: OdptManifestEntry[]): OdptManifestE
 	});
 }
 
-export async function collectOdptManifest(fetcher: typeof fetch, now: Date): Promise<OdptManifestFile> {
+export async function collectOdptManifest(
+	fetcher: typeof fetch,
+	now: Date,
+): Promise<OdptManifestFile> {
 	const datasetUrls = new Set<string>();
 	let nextUrl: string | null = CATALOG_START_URL;
 
@@ -262,7 +308,10 @@ export async function collectOdptManifest(fetcher: typeof fetch, now: Date): Pro
 		}
 	}
 
-	const feeds = sortManifestEntries(dedupeManifestEntries(entries));
+	// 本アプリはバス可視化のため、鉄道・フェリーのGTFSは除外する
+	const feeds = sortManifestEntries(dedupeManifestEntries(entries)).filter(
+		(entry) => odptEntryMode(entry) === 'bus',
+	);
 	if (feeds.length === 0) throw new Error('ODPT manifest has no feeds');
 
 	return { generatedAt: now.toISOString(), feeds };

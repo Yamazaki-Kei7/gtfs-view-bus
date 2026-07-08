@@ -10,6 +10,7 @@ interface FileSystemPromises {
 
 interface NodeProcess {
 	getBuiltinModule(name: 'node:fs/promises'): FileSystemPromises;
+	argv: string[];
 }
 
 declare const process: NodeProcess;
@@ -29,38 +30,21 @@ async function readExisting(): Promise<OdptManifestFile | null> {
 	}
 }
 
-function feedKey(feed: OdptManifestFile['feeds'][number]): string {
-	return `${feed.operator}\u0000${feed.feed}`;
-}
-
-function hasDuplicateFeedKeys(manifest: OdptManifestFile): boolean {
-	const seen = new Set<string>();
-	for (const feed of manifest.feeds) {
-		const key = feedKey(feed);
-		if (seen.has(key)) return true;
-		seen.add(key);
-	}
-	return false;
-}
-
-function hasPrivateZipUrls(manifest: OdptManifestFile): boolean {
-	return manifest.feeds.some((feed) => new URL(feed.zipUrl).hostname !== 'api-public.odpt.org');
-}
-
 async function main(): Promise<void> {
 	const existing = await readExisting();
 	const manifest = await collectOdptManifest(fetch, new Date());
 	if (manifest.feeds.length === 0) {
 		throw new Error('ODPT manifest update produced zero feeds');
 	}
+	// 件数減はHTML構造変化による抽出漏れの兆候として既定で拒否する。
+	// 意図した削減(データセット廃止など)は --force で上書きする。
 	if (
 		existing &&
 		manifest.feeds.length < existing.feeds.length &&
-		!hasDuplicateFeedKeys(existing) &&
-		!hasPrivateZipUrls(existing)
+		!process.argv.includes('--force')
 	) {
 		throw new Error(
-			`ODPT manifest shrank from ${existing.feeds.length} to ${manifest.feeds.length}; keep existing file`,
+			`ODPT manifest shrank from ${existing.feeds.length} to ${manifest.feeds.length}; rerun with --force to accept`,
 		);
 	}
 
