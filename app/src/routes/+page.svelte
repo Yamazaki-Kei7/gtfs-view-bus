@@ -30,7 +30,7 @@
 	import RouteLayers from '$lib/RouteLayers.svelte';
 	import StopTimetable from '$lib/StopTimetable.svelte';
 	import BasemapControl from '$lib/BasemapControl.svelte';
-	import PrefecturePicker from '$lib/PrefecturePicker.svelte';
+	import PrefecturePicker, { JAPAN_BOUNDS } from '$lib/PrefecturePicker.svelte';
 	import PrefectureHeader from '$lib/PrefectureHeader.svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -509,8 +509,8 @@
 		bind:map
 		class="h-full w-full"
 		style={BASE_STYLE}
-		center={[137.5, 38]}
-		zoom={4}
+		bounds={JAPAN_BOUNDS}
+		fitBoundsOptions={{ padding: 30 }}
 		attributionControl={false}
 		{cursor}
 		onclick={(ev) => {

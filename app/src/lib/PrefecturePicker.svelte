@@ -1,3 +1,11 @@
+<script lang="ts" module>
+	/** 参照デザインと同じ日本全体の表示範囲(初期カメラとピッカー再表示時の fitBounds に使う) */
+	export const JAPAN_BOUNDS: [[number, number], [number, number]] = [
+		[126, 26],
+		[146, 46],
+	];
+</script>
+
 <script lang="ts">
 	import type {
 		Map as MaplibreMap,
@@ -25,11 +33,6 @@
 	const NONE = '#e7edf0';
 	const HOVER = '#3a93b3';
 	const SRC = 'pref-choropleth';
-	// 参照デザインと同じ日本全体の表示範囲(ピッカー表示時に fitBounds する)
-	const JAPAN_BBOX: [[number, number], [number, number]] = [
-		[126, 26],
-		[146, 46],
-	];
 	const registeredIds = $derived([...counts.keys()].filter((id) => (counts.get(id) ?? 0) > 0));
 	const registeredCount = $derived(registeredIds.length);
 
@@ -89,10 +92,11 @@
 		const ids = registeredIds;
 		let disposed = false;
 
-		// 参照デザインどおり日本全体を表示する(初回マウント・「変更」での再表示とも)
+		// 参照デザインどおり日本全体を表示する(初期カメラは MapLibre の bounds で同範囲のため
+		// 実質「変更」での再表示時に効く)
 		if (!fitted) {
 			fitted = true;
-			m.fitBounds(JAPAN_BBOX, { padding: 30, duration: 900 });
+			m.fitBounds(JAPAN_BOUNDS, { padding: 30, duration: 900 });
 		}
 
 		const add = (geo: GeoJSONData) => {
@@ -139,14 +143,22 @@
 			m.on('click', 'pref-fill', onClick);
 		};
 
+		// バス脈動の setPaintProperty により isStyleLoaded()/loaded() が false に張り付き、
+		// 'load' イベントも発火しないことがある。styleが未初期化で addSource が throw した
+		// ときだけ styledata で再試行し、イベント待ちに依存しない。
+		const addWhenReady = (geo: GeoJSONData) => {
+			if (disposed) return;
+			try {
+				add(geo);
+			} catch {
+				m.once('styledata', () => addWhenReady(geo));
+			}
+		};
+
 		fetch('/japan-prefectures.geojson')
 			.then((r) => r.json() as Promise<GeoJSONData>)
-			.then((geo) => {
-				if (disposed) return;
-				if (m.isStyleLoaded()) add(geo);
-				else m.once('load', () => add(geo));
-			})
-			.catch(() => {});
+			.then((geo) => addWhenReady(geo))
+			.catch(() => console.warn('都道府県ポリゴンの取得に失敗しました'));
 
 		return () => {
 			disposed = true;

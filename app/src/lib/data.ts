@@ -60,10 +60,12 @@ export async function loadIndex(): Promise<FeedIndex> {
 /** 指定フィード集合の bundle と stops を並列取得する(loadIndex 後に選択県分だけ呼ぶ)。 */
 async function loadFeeds(entries: FeedIndexEntry[]): Promise<LoadedData> {
 	const stops: StopFeature[] = [];
+	// 変換に失敗したフィード(status: error)は成果物が無い(または古い)ため取得しない
+	const targets = entries.filter((f) => f.status !== 'error');
 	// Promise.all は入力順で結果を返すため、feeds.json の順序が保たれる(パネルの事業者並びを毎回同一にする)
 	const feeds = (
 		await Promise.all(
-			entries.map(async (f) => {
+			targets.map(async (f) => {
 				const [bundle, s] = await Promise.all([
 					fetchJson<FeedBundle>(`/data/feeds/${f.id}/bundle.json`),
 					fetchJson<GeneratedFeatureCollection<PointFeature>>(`/data/feeds/${f.id}/stops.geojson`),
