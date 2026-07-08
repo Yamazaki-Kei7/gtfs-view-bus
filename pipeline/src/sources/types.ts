@@ -1,5 +1,5 @@
 /** フィードの取得元レジストリ */
-export type SourceId = 'gtfs-data.jp' | 'odpt';
+export type SourceId = 'gtfs-data.jp' | 'odpt' | 'hoda';
 
 /** QueueメッセージとR2 manifestに保存できる、関数を持たないフィード処理対象 */
 export interface FeedTarget {

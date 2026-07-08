@@ -51,7 +51,7 @@ async function collectTargets(
 	fetcher: typeof fetch,
 ): Promise<{ targets: FeedTarget[]; counts: Record<SourceId, number> }> {
 	const targets: FeedTarget[] = [];
-	const counts: Record<SourceId, number> = { 'gtfs-data.jp': 0, odpt: 0 };
+	const counts: Record<SourceId, number> = { 'gtfs-data.jp': 0, odpt: 0, hoda: 0 };
 	for (const source of sources) {
 		const sourceTargets = await source.listTargets(fetcher);
 		targets.push(...sourceTargets);
