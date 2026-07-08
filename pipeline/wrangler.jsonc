@@ -11,10 +11,10 @@
 		"consumers": [
 			{
 				"queue": "gtfs-view-bus-feed-jobs",
-				// 外部zip取得のI/O待ちが支配的なため、バッチは小さく並列度を高くして
-				// 遅いフィードが他をブロックしないようにする
-				"max_batch_size": 3,
-				"max_batch_timeout": 10,
+				// 1バッチ=1フィードにして、大規模フィードの変換が128MBを単独で使えるようにする
+				// (複数フィードを1 isolateで処理するとメモリ超過=exceededMemoryで落ちるため)
+				"max_batch_size": 1,
+				"max_batch_timeout": 5,
 				"max_retries": 3,
 				"dead_letter_queue": "gtfs-view-bus-feed-jobs-dlq",
 				"max_concurrency": 20,
