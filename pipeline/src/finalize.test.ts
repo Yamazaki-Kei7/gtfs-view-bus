@@ -136,11 +136,7 @@ describe('maybeFinalizeJob', () => {
 		expect(index.generatedAt).toBe('2026-07-07T12:00:00.000Z');
 		expect(index.feeds.map((feed) => feed.id)).toEqual(['a', 'b', 'c']);
 		expect(index.feeds[0].shapeSourceCounts).toEqual({ shapes: 1, route: 0, straight: 0 });
-		expect(index.feeds.map((f) => (f as { prefId?: number | null }).prefId)).toEqual([
-			13,
-			null,
-			1,
-		]);
+		expect(index.feeds.map((f) => (f as { prefId?: number | null }).prefId)).toEqual([13, null, 1]);
 		const summary = JSON.parse(bucket.store.get(jobSummaryKey('job-1')) ?? '{}') as JobSummary;
 		expect(summary).toEqual({
 			jobId: 'job-1',

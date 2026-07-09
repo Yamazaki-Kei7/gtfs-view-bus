@@ -140,17 +140,14 @@ describe('createCkanPackageSource', () => {
 			fromDate: '',
 			toDate: '',
 			source: 'hoda',
-			versionId:
-				'c84abf64-f7ba-4d22-8cc1-acac7adbdc6f:2026-07-01T00:00:06.572591:rev-bus:410309',
+			versionId: 'c84abf64-f7ba-4d22-8cc1-acac7adbdc6f:2026-07-01T00:00:06.572591:rev-bus:410309',
 			zipUrl:
 				'https://ckan.hoda.jp/dataset/24/resource/c84abf64-f7ba-4d22-8cc1-acac7adbdc6f/download/abashiri_bus.zip',
 			prefId: 1,
 		});
 		expect(targets[1].name).toContain('フェリー');
 		expect(targets[2].name).toContain('市電');
-		expect(targets[2].versionId).toBe(
-			'cf1835a7-6a0e-4483-a6de-6a8dc1f71aca::rev-tram:10240',
-		);
+		expect(targets[2].versionId).toBe('cf1835a7-6a0e-4483-a6de-6a8dc1f71aca::rev-tram:10240');
 	});
 
 	it('CKAN API失敗をソース一覧失敗としてthrowする', async () => {
