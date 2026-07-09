@@ -10,7 +10,7 @@ import {
 } from './jobState';
 import { maybeFinalizeJob, writeFeedStatus } from './finalize';
 import type { BucketLike } from './storage';
-import type { FeedTarget } from './sources/types';
+import type { FeedTarget, SourceId } from './sources/types';
 
 function fakeBucket(): BucketLike & { store: Map<string, string>; deleted: string[] } {
 	const store = new Map<string, string>();
@@ -38,7 +38,7 @@ function fakeBucket(): BucketLike & { store: Map<string, string>; deleted: strin
 	};
 }
 
-function target(id: string, source: 'gtfs-data.jp' | 'odpt', prefId?: number | null): FeedTarget {
+function target(id: string, source: SourceId, prefId?: number | null): FeedTarget {
 	return {
 		id,
 		name: id,
@@ -90,7 +90,7 @@ describe('maybeFinalizeJob', () => {
 			jobId: 'job-1',
 			createdAt: '2026-07-07T12:00:00.000Z',
 			targets,
-			sources: { 'gtfs-data.jp': 1, odpt: 1 },
+			sources: { 'gtfs-data.jp': 1, odpt: 1, hoda: 0 },
 			previousFeedsGeneratedAt: null,
 		};
 		bucket.store.set(jobManifestKey('job-1'), JSON.stringify(manifest));
@@ -107,17 +107,22 @@ describe('maybeFinalizeJob', () => {
 
 	it('全status完了時だけfeeds.json/summary/currentを書き、孤児掃除する', async () => {
 		const bucket = fakeBucket();
-		const targets = [target('a', 'gtfs-data.jp', 13), target('b', 'odpt', null)];
+		const targets = [
+			target('a', 'gtfs-data.jp', 13),
+			target('b', 'odpt', null),
+			target('c', 'hoda', 1),
+		];
 		const manifest: JobManifest = {
 			jobId: 'job-1',
 			createdAt: '2026-07-07T12:00:00.000Z',
 			targets,
-			sources: { 'gtfs-data.jp': 1, odpt: 1 },
+			sources: { 'gtfs-data.jp': 1, odpt: 1, hoda: 1 },
 			previousFeedsGeneratedAt: '2026-06-01T00:00:00.000Z',
 		};
 		bucket.store.set(jobManifestKey('job-1'), JSON.stringify(manifest));
 		bucket.store.set(jobStatusKey('job-1', 'a'), JSON.stringify(status(targets[0], 'updated')));
 		bucket.store.set(jobStatusKey('job-1', 'b'), JSON.stringify(status(targets[1], 'error')));
+		bucket.store.set(jobStatusKey('job-1', 'c'), JSON.stringify(status(targets[2], 'updated')));
 		bucket.store.set('feeds/orphan/bundle.json', '{}');
 		bucket.store.set('feeds/a/bundle.json', '{}');
 
@@ -129,26 +134,26 @@ describe('maybeFinalizeJob', () => {
 			feeds: { id: string; shapeSourceCounts?: Record<string, number> }[];
 		};
 		expect(index.generatedAt).toBe('2026-07-07T12:00:00.000Z');
-		expect(index.feeds.map((feed) => feed.id)).toEqual(['a', 'b']);
+		expect(index.feeds.map((feed) => feed.id)).toEqual(['a', 'b', 'c']);
 		expect(index.feeds[0].shapeSourceCounts).toEqual({ shapes: 1, route: 0, straight: 0 });
-		expect(index.feeds.map((f) => (f as { prefId?: number | null }).prefId)).toEqual([13, null]);
+		expect(index.feeds.map((f) => (f as { prefId?: number | null }).prefId)).toEqual([13, null, 1]);
 		const summary = JSON.parse(bucket.store.get(jobSummaryKey('job-1')) ?? '{}') as JobSummary;
 		expect(summary).toEqual({
 			jobId: 'job-1',
 			generatedAt: '2026-07-07T12:00:00.000Z',
-			total: 2,
-			updated: 1,
+			total: 3,
+			updated: 2,
 			unchanged: 0,
 			error: 1,
-			sources: { 'gtfs-data.jp': 1, odpt: 1 },
+			sources: { 'gtfs-data.jp': 1, odpt: 1, hoda: 1 },
 			published: true,
 			prefIdMissing: 1,
 		});
 		expect(JSON.parse(bucket.store.get(CURRENT_JOB_KEY) ?? '{}')).toMatchObject({
 			jobId: 'job-1',
 			status: 'completed',
-			total: 2,
-			completed: 2,
+			total: 3,
+			completed: 3,
 		});
 		expect(bucket.deleted).toEqual(['feeds/orphan/bundle.json']);
 	});

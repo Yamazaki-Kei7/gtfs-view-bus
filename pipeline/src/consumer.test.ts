@@ -81,7 +81,7 @@ function saveManifest(bucket: ReturnType<typeof fakeBucket>, body: FeedJobMessag
 			jobId: body.jobId,
 			createdAt: '2026-07-07T12:00:00.000Z',
 			targets: [body.target],
-			sources: { 'gtfs-data.jp': 1, odpt: 0 },
+			sources: { 'gtfs-data.jp': 1, odpt: 0, hoda: 0 },
 			previousFeedsGeneratedAt: null,
 		}),
 	);

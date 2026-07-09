@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createFeedJob, type QueueLike } from './jobProducer';
 import type { FeedJobMessage, JobCurrent, JobManifest } from './jobState';
 import type { BucketLike } from './storage';
-import type { FeedSource, FeedTarget } from './sources/types';
+import type { FeedSource, FeedTarget, SourceId } from './sources/types';
 
 function fakeBucket(): BucketLike & { store: Map<string, string> } {
 	const store = new Map<string, string>();
@@ -32,7 +32,7 @@ function fakeQueue(): QueueLike<FeedJobMessage> & { batches: { body: FeedJobMess
 	};
 }
 
-function target(id: string, source: 'gtfs-data.jp' | 'odpt'): FeedTarget {
+function target(id: string, source: SourceId): FeedTarget {
 	return {
 		id,
 		name: id,
@@ -54,26 +54,30 @@ describe('createFeedJob', () => {
 			sourceId: 'gtfs-data.jp',
 			listTargets: async () => [target('a', 'gtfs-data.jp'), target('b', 'gtfs-data.jp')],
 		};
+		const hodaSource: FeedSource = {
+			sourceId: 'hoda',
+			listTargets: async () => [target('hoda-feed', 'hoda')],
+		};
 		const result = await createFeedJob({
 			bucket,
 			queue,
 			fetcher: fetch,
-			sources: [source],
+			sources: [source, hodaSource],
 			now: () => new Date('2026-07-07T12:00:00.000Z'),
 			randomBytes: () => new Uint8Array([0xa1, 0xb2, 0xc3]),
 		});
-		expect(result).toEqual({ status: 'queued', jobId: '20260707T120000Z-a1b2c3', total: 2 });
+		expect(result).toEqual({ status: 'queued', jobId: '20260707T120000Z-a1b2c3', total: 3 });
 		const manifest = JSON.parse(
 			bucket.store.get('pipeline/jobs/20260707T120000Z-a1b2c3/manifest.json') ?? '{}',
 		) as JobManifest;
-		expect(manifest.targets.map((t) => t.id)).toEqual(['a', 'b']);
-		expect(manifest.sources).toEqual({ 'gtfs-data.jp': 2, odpt: 0 });
+		expect(manifest.targets.map((t) => t.id)).toEqual(['a', 'b', 'hoda-feed']);
+		expect(manifest.sources).toEqual({ 'gtfs-data.jp': 2, odpt: 0, hoda: 1 });
 		const current = JSON.parse(
 			bucket.store.get('pipeline/jobs/current.json') ?? '{}',
 		) as JobCurrent;
 		expect(current.status).toBe('queued');
 		expect(queue.batches).toHaveLength(1);
-		expect(queue.batches[0].map((m) => m.body.target.id)).toEqual(['a', 'b']);
+		expect(queue.batches[0].map((m) => m.body.target.id)).toEqual(['a', 'b', 'hoda-feed']);
 	});
 
 	it('Queue投入を100件ずつ分割する', async () => {

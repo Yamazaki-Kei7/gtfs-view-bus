@@ -156,7 +156,7 @@
 			{/each}
 			{#if empty}
 				<div class="px-3 py-6 text-center text-[13px] leading-relaxed text-mi-slate-500">
-					このバス停を通る運行中の路線は、現在レイヤで表示されていません。<br
+					この停留所を通る運行中の路線は、現在レイヤで表示されていません。<br
 					/>左の「路線レイヤ」から表示をオンにしてください。
 				</div>
 			{/if}

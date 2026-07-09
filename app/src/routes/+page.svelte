@@ -698,7 +698,7 @@
 		<div
 			class="absolute top-4 left-1/2 z-10 -translate-x-1/2 rounded-[10px] bg-mi-teal-900/90 px-4 py-2 text-sm text-white shadow-lg"
 		>
-			この日時に運行中のバスはありません(日付がダイヤの有効期間外の可能性があります)
+			この日時に運行中の公共交通はありません(日付がダイヤの有効期間外の可能性があります)
 		</div>
 	{/if}
 
