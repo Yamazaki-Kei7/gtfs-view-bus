@@ -27,6 +27,7 @@
 		'gtfs-data.jp': 'GTFSデータリポジトリ(gtfs-data.jp)',
 		odpt: '公共交通オープンデータセンター(ODPT)',
 		hoda: '北海道オープンデータプラットフォーム(HODA)',
+		'bus-kyo': '広島県バス協会 GTFSオープンデータ',
 	};
 	// source未設定の旧feeds.jsonはgtfs-data.jp由来として扱う
 	const credits = $derived(
