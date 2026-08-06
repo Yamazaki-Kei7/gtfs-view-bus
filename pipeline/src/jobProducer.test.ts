@@ -71,7 +71,7 @@ describe('createFeedJob', () => {
 			bucket.store.get('pipeline/jobs/20260707T120000Z-a1b2c3/manifest.json') ?? '{}',
 		) as JobManifest;
 		expect(manifest.targets.map((t) => t.id)).toEqual(['a', 'b', 'hoda-feed']);
-		expect(manifest.sources).toEqual({ 'gtfs-data.jp': 2, odpt: 0, hoda: 1 });
+		expect(manifest.sources).toEqual({ 'gtfs-data.jp': 2, odpt: 0, hoda: 1, 'bus-kyo': 0 });
 		const current = JSON.parse(
 			bucket.store.get('pipeline/jobs/current.json') ?? '{}',
 		) as JobCurrent;
