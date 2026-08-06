@@ -18,7 +18,7 @@ describe('createBusKyoSource', () => {
 			toDate: '',
 			source: 'bus-kyo',
 			versionId: '',
-			zipUrl: 'https://ajt-mobusta-gtfs.mcapps.jp/static/8/latest.zip',
+			zipUrl: 'https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip',
 			prefId: 34,
 		});
 	});
@@ -38,5 +38,27 @@ describe('createBusKyoSource', () => {
 		const targets = await createBusKyoSource().listTargets(fetch);
 		const ids = targets.map((t) => t.id);
 		expect(new Set(ids).size).toBe(ids.length);
+	});
+
+	it('全エントリの必須項目が健全である(name/orgName/zipUrl 非空・HTTPS・zipUrl一意)', async () => {
+		const targets = await createBusKyoSource().listTargets(fetch);
+		const zipUrls = new Set<string>();
+		for (const t of targets) {
+			expect(t.name.length).toBeGreaterThan(0);
+			expect(t.orgName.length).toBeGreaterThan(0);
+			expect(t.id).not.toBe('bus-kyo~');
+			expect(t.zipUrl.startsWith('https://')).toBe(true);
+			zipUrls.add(t.zipUrl);
+		}
+		expect(zipUrls.size).toBe(targets.length);
+	});
+
+	it('モバイルクリエイト系(mcapps)は現在データ current_data.zip を指す', async () => {
+		const targets = await createBusKyoSource().listTargets(fetch);
+		const mcapps = targets.filter((t) => t.zipUrl.includes('ajt-mobusta-gtfs.mcapps.jp'));
+		expect(mcapps).toHaveLength(13);
+		for (const t of mcapps) {
+			expect(t.zipUrl.endsWith('/current_data.zip')).toBe(true);
+		}
 	});
 });

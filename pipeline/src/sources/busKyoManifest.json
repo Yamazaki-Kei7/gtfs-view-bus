@@ -2,67 +2,67 @@
 	{
 		"key": "hiroden",
 		"name": "広島電鉄",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/8/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip"
 	},
 	{
 		"key": "hiroshima-bus",
 		"name": "広島バス",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/9/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/9/current_data.zip"
 	},
 	{
 		"key": "hiroshima-kotsu",
 		"name": "広島交通",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/10/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/10/current_data.zip"
 	},
 	{
 		"key": "geiyo-bus",
 		"name": "芸陽バス",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/11/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/11/current_data.zip"
 	},
 	{
 		"key": "bihoku-kotsu",
 		"name": "備北交通",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/12/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/12/current_data.zip"
 	},
 	{
 		"key": "jrbus-chugoku",
 		"name": "JRバス中国",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/15/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/15/current_data.zip"
 	},
 	{
 		"key": "hd-nishi-hiroshima",
 		"name": "エイチ・ディー西広島",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/13/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/13/current_data.zip"
 	},
 	{
 		"key": "forble",
 		"name": "フォーブル",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/14/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/14/current_data.zip"
 	},
 	{
 		"key": "sasaki-kanko",
 		"name": "ささき観光",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/17/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/17/current_data.zip"
 	},
 	{
 		"key": "kure-seikatsu-bus",
 		"name": "呉市生活バス",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/18/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/18/current_data.zip"
 	},
 	{
 		"key": "hatsukaichi-jishu",
 		"name": "廿日市市自主運行バス",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/19/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/19/current_data.zip"
 	},
 	{
 		"key": "asahi-kotsu",
 		"name": "朝日交通",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/54/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/54/current_data.zip"
 	},
 	{
 		"key": "onomichi-bus",
 		"name": "おのみちバス",
-		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/53/latest.zip"
+		"zipUrl": "https://ajt-mobusta-gtfs.mcapps.jp/static/53/current_data.zip"
 	},
 	{
 		"key": "etajima-bus",

@@ -14,12 +14,12 @@
 - **アプリは多県対応済み**: `PrefecturePicker` が全国コロプレスを描画し、`feeds.json` の `prefId` 別にフィードをロードする。広島固有のアプリ改修は出典ラベル1行のみ。
 - **既存ソースと重複しない**: gtfs-data.jp の `?pref=34` は 0 件。二重取り込みの懸念は無い。
 - **bus-kyo は機械可読カタログを持たない**: HTML ページに 17 事業者の直リンクが並ぶだけ。API/CKAN は無い。
-- **配布は3バックエンド系統・全 CC0**: モバイルクリエイト(`.../static/{N}/latest.zip` ×13)、タウンクリエーション(busit.jp ×1)、両備システムズ(bus-vision.jp ×3)。
+- **配布は3バックエンド系統・全 CC0**: モバイルクリエイト(`.../static/{N}/current_data.zip` ×13)、タウンクリエーション(busit.jp ×1)、両備システムズ(bus-vision.jp ×3)。
 - **`prefId` は自動解決も可能**: `feedProcessor` は `target.prefId` 未設定でも停留所重心から解決するが、県境路線の誤判定回避のため明示的に `prefId=34` を与える(HODA が `prefId=1` を与えるのと同様)。
 
 ## 確定要件
 
-1. 広島県バス協会が公開する 17 事業者の GTFS-JP 静的データ(「現在データ」=`latest`)を取り込み対象にする。
+1. 広島県バス協会が公開する 17 事業者の GTFS-JP 静的データ(現行ダイヤ)を取り込み対象にする。モバイルクリエイト系13事業者は「現在データ」を指す `current_data.zip` を使う(`latest.zip` は将来ダイヤ改正時に未来リビジョンへ先行し得るため使わない。※2026-08-06 時点では両者バイト一致)。
 2. bus-kyo には機械可読カタログが無いため、17 事業者の一覧はリポジトリ内の**静的 JSON マニフェスト**で保持する。
 3. 全フィードを `prefId=34`(広島県)に明示的に紐づける。
 4. ライセンスは CC0。
@@ -61,19 +61,19 @@ export function createBusKyoSource(): FeedSource;
 
 | key | name(事業者) | zipUrl |
 |---|---|---|
-| `hiroden` | 広島電鉄 | `https://ajt-mobusta-gtfs.mcapps.jp/static/8/latest.zip` |
-| `hiroshima-bus` | 広島バス | `https://ajt-mobusta-gtfs.mcapps.jp/static/9/latest.zip` |
-| `hiroshima-kotsu` | 広島交通 | `https://ajt-mobusta-gtfs.mcapps.jp/static/10/latest.zip` |
-| `geiyo-bus` | 芸陽バス | `https://ajt-mobusta-gtfs.mcapps.jp/static/11/latest.zip` |
-| `bihoku-kotsu` | 備北交通 | `https://ajt-mobusta-gtfs.mcapps.jp/static/12/latest.zip` |
-| `jrbus-chugoku` | JRバス中国 | `https://ajt-mobusta-gtfs.mcapps.jp/static/15/latest.zip` |
-| `hd-nishi-hiroshima` | エイチ・ディー西広島 | `https://ajt-mobusta-gtfs.mcapps.jp/static/13/latest.zip` |
-| `forble` | フォーブル | `https://ajt-mobusta-gtfs.mcapps.jp/static/14/latest.zip` |
-| `sasaki-kanko` | ささき観光 | `https://ajt-mobusta-gtfs.mcapps.jp/static/17/latest.zip` |
-| `kure-seikatsu-bus` | 呉市生活バス | `https://ajt-mobusta-gtfs.mcapps.jp/static/18/latest.zip` |
-| `hatsukaichi-jishu` | 廿日市市自主運行バス | `https://ajt-mobusta-gtfs.mcapps.jp/static/19/latest.zip` |
-| `asahi-kotsu` | 朝日交通 | `https://ajt-mobusta-gtfs.mcapps.jp/static/54/latest.zip` |
-| `onomichi-bus` | おのみちバス | `https://ajt-mobusta-gtfs.mcapps.jp/static/53/latest.zip` |
+| `hiroden` | 広島電鉄 | `https://ajt-mobusta-gtfs.mcapps.jp/static/8/current_data.zip` |
+| `hiroshima-bus` | 広島バス | `https://ajt-mobusta-gtfs.mcapps.jp/static/9/current_data.zip` |
+| `hiroshima-kotsu` | 広島交通 | `https://ajt-mobusta-gtfs.mcapps.jp/static/10/current_data.zip` |
+| `geiyo-bus` | 芸陽バス | `https://ajt-mobusta-gtfs.mcapps.jp/static/11/current_data.zip` |
+| `bihoku-kotsu` | 備北交通 | `https://ajt-mobusta-gtfs.mcapps.jp/static/12/current_data.zip` |
+| `jrbus-chugoku` | JRバス中国 | `https://ajt-mobusta-gtfs.mcapps.jp/static/15/current_data.zip` |
+| `hd-nishi-hiroshima` | エイチ・ディー西広島 | `https://ajt-mobusta-gtfs.mcapps.jp/static/13/current_data.zip` |
+| `forble` | フォーブル | `https://ajt-mobusta-gtfs.mcapps.jp/static/14/current_data.zip` |
+| `sasaki-kanko` | ささき観光 | `https://ajt-mobusta-gtfs.mcapps.jp/static/17/current_data.zip` |
+| `kure-seikatsu-bus` | 呉市生活バス | `https://ajt-mobusta-gtfs.mcapps.jp/static/18/current_data.zip` |
+| `hatsukaichi-jishu` | 廿日市市自主運行バス | `https://ajt-mobusta-gtfs.mcapps.jp/static/19/current_data.zip` |
+| `asahi-kotsu` | 朝日交通 | `https://ajt-mobusta-gtfs.mcapps.jp/static/54/current_data.zip` |
+| `onomichi-bus` | おのみちバス | `https://ajt-mobusta-gtfs.mcapps.jp/static/53/current_data.zip` |
 | `etajima-bus` | 江田島バス | `https://gtfs-st.busit.jp/api/etajimabus` |
 | `chugoku-bus` | 中国バス | `https://bus-vision.jp/gtfs_v2/chugokubus/gtfsFeed` |
 | `tomotetsu` | 鞆鉄道 | `https://bus-vision.jp/gtfs_v2/tomotetsubus/gtfsFeed` |
@@ -100,7 +100,7 @@ export function createBusKyoSource(): FeedSource;
 
 ### versionId を空文字にする理由
 
-`latest.zip` 等は URL 固定で、listing 側にバージョン情報(`last_modified` 等)が無い。`feedProcessor` は `versionId === ''` を既に「差分スキップしない=常に再処理」の合図として扱っている(元は ODPT の版数解決失敗記述子)。bus-kyo は月次・17 件と少なく毎回再変換しても負荷は無視できるため、「ソース zip が変わったら確実に反映される(陳腐化しない)」ことを優先して `''` を採用する。HTTP HEAD で `ETag`/`Last-Modified` を取って差分スキップする最適化は、取得先サーバのヘッダ挙動に依存し複雑さに見合わないため採らない(YAGNI)。
+`current_data.zip` 等は URL 固定で、listing 側にバージョン情報(`last_modified` 等)が無い。`feedProcessor` は `versionId === ''` を既に「差分スキップしない=常に再処理」の合図として扱っている(元は ODPT の版数解決失敗記述子)。bus-kyo は月次・17 件と少なく毎回再変換しても負荷は無視できるため、「ソース zip が変わったら確実に反映される(陳腐化しない)」ことを優先して `''` を採用する。HTTP HEAD で `ETag`/`Last-Modified` を取って差分スキップする最適化は、取得先サーバのヘッダ挙動に依存し複雑さに見合わないため採らない(YAGNI)。
 
 ## 既存バグの修正
 
@@ -166,7 +166,7 @@ pnpm format:check
 ## 既知のリスク(実装時に検証)
 
 - **末尾 4 件の API 風エンドポイント**: `etajima-bus`(busit.jp)、`chugoku-bus` / `tomotetsu` / `ikasa-bus`(bus-vision.jp)は `.zip` 拡張子でない。実装時に少なくとも 1 件を実際に fetch し、GTFS 静的 zip(RT protobuf でない・追加パラメータ不要)であることを確認する。zip でない場合は per-feed の `status: "error"` になり他に影響しないが、対象から外すか要判断。
-- **「現在データ」であることの確認**: `latest.zip` が「未来データ」ではなく現行ダイヤであることを確認する。
+- **「現在データ」であることの確認**: mobusta系は `current_data.zip`(現行ダイヤ)を使う。`latest.zip` は将来リビジョンへ先行し得るため使わない(2026-08-06 実測では全13事業者で両者バイト一致・全て当日を含む)。
 
 ## 反映(マージ後の運用)
 
@@ -184,4 +184,4 @@ bus-kyo ページを月次で取得し HTML を解析してリンクを自動抽
 
 ### HTTP HEAD による versionId 生成
 
-`latest.zip` に HEAD を投げて `ETag`/`Last-Modified`/`Content-Length` を versionId にし差分スキップする案。最適だが取得先サーバのヘッダ挙動に依存し、月次 17 件の再変換コストに見合わない。
+`current_data.zip` に HEAD を投げて `ETag`/`Last-Modified`/`Content-Length` を versionId にし差分スキップする案。最適だが取得先サーバのヘッダ挙動に依存し、月次 17 件の再変換コストに見合わない。

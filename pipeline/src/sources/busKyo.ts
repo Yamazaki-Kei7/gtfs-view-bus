@@ -8,7 +8,9 @@ interface BusKyoEntry {
 	zipUrl: string;
 }
 
-const MANIFEST = manifestJson as BusKyoEntry[];
+// as アサーションを避け、readonly 型注釈で JSON の構造を tsc に検査させる
+// (name 欠落や zipUrl の綴り誤りをコンパイル時に検出する)
+const MANIFEST: readonly BusKyoEntry[] = manifestJson;
 /** JIS 都道府県コード: 広島県 */
 const PREF_HIROSHIMA = 34;
 
