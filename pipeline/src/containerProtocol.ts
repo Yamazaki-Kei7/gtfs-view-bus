@@ -1,5 +1,5 @@
 import type { FeedJobMessage, FeedStatus } from './jobState';
-import type { SourceId } from './sources/types';
+import { SOURCE_IDS, type SourceId } from './sources/types';
 
 export const CONTAINER_PROCESS_PATH = '/process-feed';
 export const CONTAINER_PROCESS_TIMEOUT_MS = 14 * 60 * 1000;
@@ -15,7 +15,7 @@ export function containerInstanceName(jobId: string, feedId: string): string {
 }
 
 function isSourceId(value: string | undefined): value is SourceId {
-	return value === 'gtfs-data.jp' || value === 'odpt';
+	return value !== undefined && (SOURCE_IDS as readonly string[]).includes(value);
 }
 
 function isStatus(value: string | undefined): value is FeedStatus['status'] {

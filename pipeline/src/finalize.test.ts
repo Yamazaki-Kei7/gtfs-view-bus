@@ -90,7 +90,7 @@ describe('maybeFinalizeJob', () => {
 			jobId: 'job-1',
 			createdAt: '2026-07-07T12:00:00.000Z',
 			targets,
-			sources: { 'gtfs-data.jp': 1, odpt: 1, hoda: 0 },
+			sources: { 'gtfs-data.jp': 1, odpt: 1, hoda: 0, 'bus-kyo': 0 },
 			previousFeedsGeneratedAt: null,
 		};
 		bucket.store.set(jobManifestKey('job-1'), JSON.stringify(manifest));
@@ -116,7 +116,7 @@ describe('maybeFinalizeJob', () => {
 			jobId: 'job-1',
 			createdAt: '2026-07-07T12:00:00.000Z',
 			targets,
-			sources: { 'gtfs-data.jp': 1, odpt: 1, hoda: 1 },
+			sources: { 'gtfs-data.jp': 1, odpt: 1, hoda: 1, 'bus-kyo': 0 },
 			previousFeedsGeneratedAt: '2026-06-01T00:00:00.000Z',
 		};
 		bucket.store.set(jobManifestKey('job-1'), JSON.stringify(manifest));
@@ -145,7 +145,7 @@ describe('maybeFinalizeJob', () => {
 			updated: 2,
 			unchanged: 0,
 			error: 1,
-			sources: { 'gtfs-data.jp': 1, odpt: 1, hoda: 1 },
+			sources: { 'gtfs-data.jp': 1, odpt: 1, hoda: 1, 'bus-kyo': 0 },
 			published: true,
 			prefIdMissing: 1,
 		});

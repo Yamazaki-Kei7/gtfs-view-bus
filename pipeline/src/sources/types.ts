@@ -1,5 +1,6 @@
-/** フィードの取得元レジストリ */
-export type SourceId = 'gtfs-data.jp' | 'odpt' | 'hoda';
+/** フィードの取得元レジストリ。ここが SourceId の唯一の真実。追加時はこの配列だけ更新する */
+export const SOURCE_IDS = ['gtfs-data.jp', 'odpt', 'hoda', 'bus-kyo'] as const;
+export type SourceId = (typeof SOURCE_IDS)[number];
 
 /** QueueメッセージとR2 manifestに保存できる、関数を持たないフィード処理対象 */
 export interface FeedTarget {

@@ -89,4 +89,22 @@ describe('containerProtocol', () => {
 			),
 		).toThrow('container status response malformed: status');
 	});
+
+	it('hoda / bus-kyo を含む全SourceIdのsourceを受理する', () => {
+		for (const source of ['gtfs-data.jp', 'odpt', 'hoda', 'bus-kyo'] as const) {
+			const status = parseFeedStatusResponse(
+				JSON.stringify({
+					id: 'feed-1',
+					name: 'フィード1',
+					orgName: '事業者',
+					license: null,
+					fromDate: '',
+					toDate: '',
+					source,
+					status: 'updated',
+				}),
+			);
+			expect(status.source).toBe(source);
+		}
+	});
 });
