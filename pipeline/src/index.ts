@@ -6,6 +6,7 @@ import { createFeedJob } from './jobProducer';
 import type { FeedJobMessage } from './jobState';
 import { toBucketLike } from './storage';
 import { createCkanPackageSource } from './sources/ckanPackage';
+import { createBusKyoSource } from './sources/busKyo';
 import { createGtfsDataJpSource } from './sources/gtfsDataJp';
 import { createOdptSource, withOdptConsumerKey } from './sources/odpt';
 export { FeedProcessorContainer } from './container';
@@ -37,6 +38,7 @@ export default {
 						prefId: 1,
 						excludedNamePatterns: [/観光データ/],
 					}),
+					createBusKyoSource(),
 				],
 				now: () => new Date(),
 				randomBytes,
