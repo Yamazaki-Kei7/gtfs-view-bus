@@ -1,8 +1,8 @@
-FROM node:22-slim
+FROM node:lts-slim
 
 WORKDIR /workspace
 
-RUN corepack enable
+RUN npm install --global corepack && corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY pipeline/package.json pipeline/package.json
