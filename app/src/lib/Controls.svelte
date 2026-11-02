@@ -6,7 +6,13 @@
 		busCount,
 		feedInfos,
 		mapAttribution,
-	}: { busCount: number; feedInfos: FeedIndexEntry[]; mapAttribution: string } = $props();
+		mapAttributionUrl,
+	}: {
+		busCount: number;
+		feedInfos: FeedIndexEntry[];
+		mapAttribution: string;
+		mapAttributionUrl: string;
+	} = $props();
 
 	const timeLabel = $derived(
 		`${String(Math.floor(sim.timeSec / 3600)).padStart(2, '0')}:${String(
@@ -150,7 +156,11 @@
 						? '・更新失敗'
 						: ''})
 				{/each}
-				— {credits} / 地図: {mapAttribution} | MapLibre
+				— {credits} / 地図:
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- 出典は設定済みの外部URLのため、アプリ内パスの解決は不要 -->
+				<a href={mapAttributionUrl} target="_blank" rel="noreferrer" class="underline">
+					{mapAttribution}
+				</a> | MapLibre
 			</div>
 		{/if}
 	</div>

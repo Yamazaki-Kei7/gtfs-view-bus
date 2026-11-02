@@ -1,4 +1,4 @@
-export type BasemapKey = 'osm' | 'positron' | 'voyager';
+export type BasemapKey = 'osm' | 'gsi-pale' | 'gsi-std';
 
 export interface BasemapDef {
 	/** セレクタボタンのtitle属性用フルラベル */
@@ -8,17 +8,12 @@ export interface BasemapDef {
 	tiles: string[];
 	maxzoom: number;
 	attribution: string;
+	attributionUrl: string;
 }
 
 const OSM_ATTRIBUTION = '© OpenStreetMap contributors';
-const CARTO_ATTRIBUTION = '© OpenStreetMap contributors © CARTO';
-
-// MapLibreのraster sourceは{s}サブドメイン置換に対応しないため、a/b/c/dを事前展開したURL配列を渡す
-function cartoRasterTiles(path: string): string[] {
-	return ['a', 'b', 'c', 'd'].map(
-		(s) => `https://${s}.basemaps.cartocdn.com/${path}/{z}/{x}/{y}.png`,
-	);
-}
+const GSI_ATTRIBUTION = '国土地理院';
+const GSI_ATTRIBUTION_URL = 'https://maps.gsi.go.jp/development/ichiran.html';
 
 export const BASEMAPS: Record<BasemapKey, BasemapDef> = {
 	osm: {
@@ -27,21 +22,25 @@ export const BASEMAPS: Record<BasemapKey, BasemapDef> = {
 		tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
 		maxzoom: 19,
 		attribution: OSM_ATTRIBUTION,
+		attributionUrl: 'https://www.openstreetmap.org/copyright',
 	},
-	positron: {
-		label: 'Carto Positron(淡色)',
-		short: 'Positron',
-		tiles: cartoRasterTiles('light_all'),
-		maxzoom: 20,
-		attribution: CARTO_ATTRIBUTION,
+	// CARTOはAPIキー必須になったため、キーなしで利用できる地理院タイルを使う。
+	'gsi-pale': {
+		label: '国土地理院(淡色地図)',
+		short: '淡色地図',
+		tiles: ['https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png'],
+		maxzoom: 18,
+		attribution: GSI_ATTRIBUTION,
+		attributionUrl: GSI_ATTRIBUTION_URL,
 	},
-	voyager: {
-		label: 'Carto Voyager(道路強調)',
-		short: 'Voyager',
-		tiles: cartoRasterTiles('rastertiles/voyager'),
-		maxzoom: 20,
-		attribution: CARTO_ATTRIBUTION,
+	'gsi-std': {
+		label: '国土地理院(標準地図)',
+		short: '標準地図',
+		tiles: ['https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png'],
+		maxzoom: 18,
+		attribution: GSI_ATTRIBUTION,
+		attributionUrl: GSI_ATTRIBUTION_URL,
 	},
 };
 
-export const BASEMAP_KEYS: BasemapKey[] = ['osm', 'positron', 'voyager'];
+export const BASEMAP_KEYS: BasemapKey[] = ['osm', 'gsi-pale', 'gsi-std'];

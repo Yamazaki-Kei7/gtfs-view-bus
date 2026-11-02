@@ -69,7 +69,7 @@
 			layers: [{ id: 'base', type: 'raster', source: 'base' }],
 		};
 	}
-	const INITIAL_BASEMAP: BasemapKey = 'positron';
+	const INITIAL_BASEMAP: BasemapKey = 'gsi-pale';
 	const BASE_STYLE = baseStyle(INITIAL_BASEMAP);
 
 	// 路線色はデータ駆動式で指定する
@@ -511,6 +511,7 @@
 		style={BASE_STYLE}
 		bounds={JAPAN_BOUNDS}
 		fitBoundsOptions={{ padding: 30 }}
+		minZoom={2}
 		attributionControl={false}
 		{cursor}
 		onclick={(ev) => {
@@ -729,6 +730,7 @@
 				? index.feeds.filter((f) => f.prefId === selectedPref)
 				: (index?.feeds ?? [])}
 			mapAttribution={BASEMAPS[basemap].attribution}
+			mapAttributionUrl={BASEMAPS[basemap].attributionUrl}
 		/>
 		<StopTimetable
 			open={!!selectedStop}
